@@ -1602,7 +1602,11 @@ function applyGeometry(){
   setGeo(lab.eUmbra, frustumGeo(RE, RE-Le*(RS-RE)/DS, Le)); setGeo(lab.ePenumbra, frustumGeo(RE, RE+Le*(RS+RE)/DS, Le));
   const closeUp = s.ground || s.camMode==='shadow';
   const mo=(G.solar?1:0.45)*(closeUp?0.15:1), eo=(G.solar?0.45:1)*(s.camMode==='moon'||closeUp?0.4:1);
-  lab.umbra.material.opacity=0.62*mo; lab.antumbra.material.opacity=0.28*mo; lab.penumbra.material.opacity=0.22*mo; lab.eUmbra.material.opacity=0.34*eo; lab.ePenumbra.material.opacity=0.16*eo;
+  // Give the teaching tour a clearly visible blue shadow without changing its size.
+  lab.penumbra.material.color.setHex(s.yearMode?0x438cff:0x232a4d);
+  lab.umbra.material.opacity=(s.yearMode?0.82:0.62)*mo;
+  lab.penumbra.material.opacity=(s.yearMode?0.52:0.22)*mo;
+  lab.antumbra.material.opacity=0.28*mo; lab.eUmbra.material.opacity=0.34*eo; lab.ePenumbra.material.opacity=0.16*eo;
   lab.moonShadow.visible=lab.earthShadow.visible=s.shadows&&!s.ground;   // from the ground the beams are just haze
   const realOrbit=s.real&&s.eph&&s.eph.orbit;
   if(realOrbit){
