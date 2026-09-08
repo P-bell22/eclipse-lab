@@ -178,11 +178,59 @@
     #sky{display:none}
   }
   @media (prefers-reduced-motion:reduce){ #fade{transition:none} #loading .orb{animation:none} }
+  #yearBlock h2{font-size:23px;margin:10px 0 4px}
+  #yearBlock .year-intro{font-size:13px;margin:4px 0 10px}
+  #yearDate{font-family:var(--display);font-size:19px;color:var(--gold);margin-top:12px}
+  #yearPhase,#yearCounter,#yearDuration{font-size:12px;color:var(--muted)}
+  #yearStory{border-left:3px solid var(--gold);padding:8px 12px;background:rgba(255,200,87,.045);border-radius:0 10px 10px 0;margin:12px 0;min-height:108px}
+  #yearStory h3{font-family:var(--display);font-size:18px;margin:0 0 6px;line-height:1.25}
+  #yearStory p{font-size:13px;margin:0;line-height:1.5}
+  #yearPlay{margin-top:0}
+  #yearBlock .year-controls{justify-content:space-between}
+  #yearBlock .year-speed{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-top:10px}
+  #yearSpeed{width:78px;margin:0;padding:5px 8px}
+  #yearTimeline{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:10px}
+  #yearTimeline button{min-height:49px;border:1px solid var(--line);border-radius:9px;background:var(--panel-2);color:var(--muted);font:inherit;font-size:12px;cursor:pointer;padding:6px 3px;text-align:center}
+  #yearTimeline button span{display:block;font-size:10px;margin-top:2px}
+  #yearTimeline button.seen{color:var(--ink)}
+  #yearTimeline button[data-kind=total].seen{color:var(--gold);border-color:rgba(255,200,87,.65)}
+  #yearTimeline button[data-kind=annular].seen{color:var(--ember);border-color:rgba(255,138,61,.65)}
+  #yearTimeline button[aria-current=true]{outline:2px solid var(--sky);outline-offset:1px}
+  #yearBlock button:focus-visible,#yearBlock select:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+  #yearOverview{position:fixed;top:110px;left:16px;width:196px;padding:12px;box-sizing:border-box;background:var(--panel);border:1px solid var(--line);border-radius:14px;z-index:4}
+  #yearOverview svg{display:block;width:100%;height:auto}
+  #yearOverview p{font-size:11px;margin:6px 0 0;line-height:1.4;color:var(--muted)}
+  #yearOverview .eyebrow{margin:0 0 6px;color:var(--ink);font-size:10px}
+  #yearOverview text{fill:var(--muted);font:10px var(--body)}
+  #yearMarkers{position:fixed;inset:0;pointer-events:none;z-index:3}
+  #yearMarkers i{position:absolute;display:block;width:18px;height:18px;border:1px solid var(--sky);border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 10px rgba(108,184,255,.35)}
+  #yearMarkers i+ i{width:14px;height:14px;border-color:var(--moon);box-shadow:none}
+  .year-active #panelLab .explain,.year-active #globalStatus,.year-active #camRow,.year-active #camHeading,.year-active #labToggles,.year-active #yearShortcut{display:none}
+  @media(max-width:900px){
+    #yearOverview{top:82px;left:auto;right:8px;width:116px;padding:7px}
+    #yearOverview .eyebrow{font-size:8px;margin:0 0 3px}
+    #yearOverview p{display:none}
+    #yearBlock{display:flex;flex-direction:column}
+    #yearBlock h2,#yearBlock .year-intro{display:none}
+    #yearBlock .year-speed{order:1}
+    #yearBlock .slider,#yearCounter,#yearBlock>.eyebrow,#yearTimeline,#yearBlock>p:last-child{order:2}
+    #yearDate{font-size:17px;margin-top:8px}
+    #yearStory{min-height:0;margin:8px 0;padding:7px 10px}
+    #yearStory h3{font-size:16px;margin-bottom:4px}
+    #yearStory p{font-size:12px;line-height:1.4}
+  }
+  @media(max-width:900px) and (orientation:portrait){
+    .year-active #panelLab{max-height:52vh}
+  }
+  @media(max-width:900px) and (orientation:landscape){
+    #yearOverview{left:8px;right:auto;width:108px}
+  }
 </style>
 
 <canvas id="gl" aria-label="3D view of the Sun, Earth and Moon"></canvas>
 <canvas id="simpleCanvas" hidden aria-label="Eclipse Simple: a flat picture of the Sun, Moon and Earth you can drag about"></canvas>
 <div id="labels" aria-hidden="true"></div>
+<div id="yearMarkers" hidden aria-hidden="true"><i></i><i></i></div>
 <div id="fade"></div>
 <div id="loading"><div class="orb"></div><p>Loading the planets…</p></div>
 <div id="err"><strong>The 3D view couldn't start.</strong><br><span id="errMsg">Your browser may not support WebGL.</span></div>
@@ -247,6 +295,39 @@
   <div class="seg" id="labMode" role="group" aria-label="Lab mode" style="margin-top:0">
     <button data-labmode="sandbox" class="on">Sandbox</button>
     <button data-labmode="real">Real sky</button>
+    <button data-labmode="year">Watch a year</button>
+  </div>
+  <p id="yearError" role="alert" hidden></p>
+
+  <div id="yearBlock" hidden>
+    <h2>Why not every month?</h2>
+    <p class="year-intro">Follow 2027, new moon by new moon. Most shadows miss Earth. Once, everything falls into place.</p>
+    <button class="big" id="yearPlay">▶ Play year</button>
+    <div class="row year-controls">
+      <button class="chip sm" id="yearPrev" aria-label="Previous new moon">← Previous</button>
+      <button class="chip sm" id="yearRestart">Restart</button>
+      <button class="chip sm" id="yearNext" aria-label="Next new moon">Next →</button>
+    </div>
+    <div class="year-speed"><label for="yearSpeed">Playback speed</label><select id="yearSpeed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select><span id="yearDuration"></span></div>
+    <div id="yearDate"></div><div id="yearPhase"></div>
+    <div id="yearStory" role="status" aria-live="polite" aria-atomic="true"><h3 id="yearTitle"></h3><p id="yearText"></p></div>
+    <button class="chip sm" id="yearDetail" hidden>Inspect the shadow →</button>
+    <div class="slider"><label for="yearScrub">Move through the year <output id="yearProgress"></output></label><input type="range" id="yearScrub" min="0" max="141" step="0.1" value="0" aria-label="Time through the guided year"><div class="ends"><span>Jan 2027</span><span>Dec 2027</span></div></div>
+    <div id="yearCounter"></div>
+    <aside id="yearOverview" aria-label="Earth's progress around the Sun">
+      <div class="eyebrow">One trip around the Sun</div>
+      <svg viewBox="0 0 180 150" role="img" aria-label="Earth moves around the Sun as the year advances; bodies enlarged and distances compressed">
+        <ellipse cx="90" cy="74" rx="66" ry="49" fill="none" stroke="#6cb8ff" stroke-opacity=".5" stroke-dasharray="3 4"/>
+        <line id="yearSunLine" x1="90" y1="74" x2="90" y2="25" stroke="#ffc857" stroke-opacity=".4"/>
+        <circle cx="90" cy="74" r="13" fill="#ffc857"/><text x="90" y="100" text-anchor="middle">Sun</text>
+        <g id="yearEarth"><ellipse id="yearMiniOrbit" rx="15" ry="5" fill="none" stroke="#cfd4e3" stroke-opacity=".85"/><circle r="5" fill="#6cb8ff"/><text x="0" y="-21" text-anchor="middle">Earth</text></g>
+        <text x="90" y="146" text-anchor="middle" id="yearOverviewDate">January 2027</text>
+      </svg>
+      <p>The Moon’s orbit stays tilted by about 5°. As Earth moves, the Sun lines up with its crossing points twice a year.<br><br>Bodies enlarged; distances compressed.</p>
+    </aside>
+    <div class="eyebrow">13 new moons · 12 calendar months</div>
+    <div id="yearTimeline" role="group" aria-label="New moons in 2027"></div>
+    <p style="font-size:11px;margin:10px 0 0">Eclipse types describe what happens somewhere on Earth. Totality is only visible along a narrow path. Dates are UTC.</p>
   </div>
 
   <div id="realBlock" hidden>
@@ -306,6 +387,7 @@
   </div>
 
   </div><!-- /sandboxBlock (presets) -->
+  <button class="chip" id="yearShortcut" style="margin-top:10px" hidden>Watch the months change →</button>
 
   <div class="explain">
     <h2><span class="swatch" id="exSwatch"></span><span id="exTitle">Total solar eclipse</span></h2>
@@ -346,7 +428,7 @@
   </div>
   </div><!-- /sandboxBlock2 -->
 
-  <div class="eyebrow">Look at</div>
+  <div class="eyebrow" id="camHeading">Look at</div>
   <div class="row" id="camRow">
     <button class="chip" data-cam="whole">Whole thing</button>
     <button class="chip" data-cam="earth">Earth</button>
@@ -355,7 +437,7 @@
     <button class="chip gold" data-cam="path" id="camPath">Stand in the eclipse path</button>
     <button class="chip gold" data-cam="home" id="camHome">Look up from home</button>
   </div>
-  <div class="toggles">
+  <div class="toggles" id="labToggles">
     <label><input type="checkbox" id="tShadows" checked> Shadows</label>
     <label><input type="checkbox" id="tOrbit" checked> Orbit &amp; tilt</label>
     <label><input type="checkbox" id="tLabels" checked> Names</label>
@@ -461,6 +543,7 @@
 <div id="hint">Drag to spin · Scroll or pinch to zoom · Right-drag or two fingers to slide · Click a name to fly there</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>/*YEAR_CORE*/</script>
 <!--ASSETS-->
 <script>
 (function(){
@@ -707,10 +790,11 @@ function computeViewRect(){
   let x0=0, y0=0, x1=w, y1=h;
   const panel = state.view==='lab' ? $('#panelLab') : state.view==='simple' ? $('#panelSimple') : $('#panelSystem');
   if(panel && !panel.hidden){ const r=panel.getBoundingClientRect();
-    if(wide) x1=Math.min(x1, r.left-10); else y1=Math.min(y1, r.top-10); }
+    if(wide || (state.yearMode&&w>h)) x1=Math.min(x1, r.left-10); else y1=Math.min(y1, r.top-10); }
   const brand=$('#brand'); if(brand){ const r=brand.getBoundingClientRect(); if(!wide) y0=Math.max(y0, r.bottom+6); }
   const sky=$('#sky'); if(sky && !sky.hidden){ const r=sky.getBoundingClientRect();
     if(wide) y1=Math.min(y1, h); else y0=Math.max(y0, r.bottom+6); }
+  if(wide && state.yearMode && state.view==='lab') x0=Math.max(x0,$('#yearOverview').getBoundingClientRect().right+10);
   if(y1-y0<120){ y0=0; y1=h; }
   viewRect={x0,y0,x1,y1};
   const gg=$('#gauge'); if(gg){ gg.style.right=(w-x1+12)+'px'; gg.style.bottom=(h-y1+(wide?52:12))+'px'; }
@@ -805,6 +889,7 @@ function coverageAt(p, sunPos, sunR, occPos, occR){
 
 const state = {
   view:'system',
+  yearMode:false,
   dist:363300, lambda:0, omega:-3.5, offset:0, playing:false, speed:5,
   shadows:true, orbit:true, labels:true, camMode:'earth', ground:false, home:false, preset:'total',
   labK:6, labKTarget:6, labKFrom:6, labKT0:0, labScale:'condensed',
@@ -829,7 +914,7 @@ function computeEphemeris(ms){
   const sunKm=A.GeoVector(A.Body.Sun,t,true).Length()*AU_KM;
   const eq=A.Equator(A.Body.Sun,t,new A.Observer(0,0,0),true,true); const gast=A.SiderealTime(t);
   let subLon=-(gast-eq.ra)*15; subLon=((subLon+540)%360)-180;
-  return {elong, beta:m.lat, moonKm:m.dist*AU_KM, sunKm, sunLon:sun.elon, sunDec:eq.dec, subLon, illum:(1-Math.cos(elong*DEG))/2, bes:besselFor(ms)};
+  return {elong, beta:m.lat, moonKm:m.dist*AU_KM, sunKm, sunLon:sun.elon, sunDec:eq.dec, subLon, illum:(1-Math.cos(elong*DEG))/2, bes:besselFor(ms), orbit:window.EclipseYearCore.orbitFrame(A,ms,sun.elon)};
 }
 function siteVector(lat, lon, spin, a){   // a point on the globe → lab-frame direction, given the Earth's spin and tilt azimuth
   return V(Math.cos(lon)*Math.cos(lat), Math.sin(lat), -Math.sin(lon)*Math.cos(lat)).applyAxisAngle(Y_UP, spin).applyAxisAngle(Z_AX_, -AXIAL).applyAxisAngle(Y_UP, a);
@@ -1048,7 +1133,13 @@ function applyGeometry(){
   const mo=(G.solar?1:0.45)*(closeUp?0.15:1), eo=(G.solar?0.45:1)*(s.camMode==='moon'||closeUp?0.4:1);
   lab.umbra.material.opacity=0.62*mo; lab.antumbra.material.opacity=0.28*mo; lab.penumbra.material.opacity=0.22*mo; lab.eUmbra.material.opacity=0.34*eo; lab.ePenumbra.material.opacity=0.16*eo;
   lab.moonShadow.visible=lab.earthShadow.visible=s.shadows&&!s.ground;   // from the ground the beams are just haze
-  lab.orbitGroup.rotation.y=s.omega*DEG; lab.ring.scale.setScalar(G.d); lab.eclRing.scale.setScalar(G.d); lab.plane.scale.setScalar(G.d+6);
+  const realOrbit=s.real&&s.eph&&s.eph.orbit;
+  if(realOrbit){
+    const n=V(...realOrbit.normal), node=V(...realOrbit.node), z=new THREE.Vector3().crossVectors(node,n);
+    lab.orbitGroup.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(node,n,z));
+    lab.orbitTilt.rotation.x=0;
+  } else lab.orbitGroup.rotation.set(0,s.omega*DEG,0);
+  lab.ring.scale.setScalar(G.d); lab.eclRing.scale.setScalar(G.d); lab.plane.scale.setScalar(G.d+6);
   lab.heightLine.geometry.setFromPoints([G.moonPos, V(G.moonPos.x,0,G.moonPos.z)]); lab.footMark.position.set(G.moonPos.x,0,G.moonPos.z);
   [lab.orbitGroup,lab.eclRing,lab.plane].forEach(o=>o.visible=s.orbit&&!s.ground);
   lab.heightLine.visible=lab.footMark.visible = s.orbit && !s.ground;
@@ -1062,10 +1153,14 @@ function applyGeometry(){
   const antPt=G.moonPos.clone().addScaledVector(G.axis,Math.max(G.Lu+0.3,G.cPar-0.8));
   lab.lblAnt.getPos=()=>antPt; lab.lblAnt.on=s.shadows&&G.solar&&G.solarKind==='annular'&&g;
   const esPt=V(-G.d*0.5,0.9,0); lab.lblEShadow.getPos=()=>esPt; lab.lblEShadow.on=s.shadows&&g;
-  const om=s.omega*DEG, na=V(G.d*Math.cos(om),0,-G.d*Math.sin(om)), nb=na.clone().negate();
+  const om=s.omega*DEG, na=realOrbit?V(...realOrbit.node).multiplyScalar(G.d):V(G.d*Math.cos(om),0,-G.d*Math.sin(om)), nb=na.clone().negate();
   lab.lblNodeA.getPos=()=>na; lab.lblNodeB.getPos=()=>nb; lab.lblNodeA.on=lab.lblNodeB.on=s.orbit&&g;
   const plPt=V(0,0,G.d*0.8); lab.lblPlane.getPos=()=>plPt; lab.lblPlane.on=s.orbit&&g;
   lab.lblYou.on=g&&!s.home; lab.lblSun.on=true; lab.lblEarth.on=g; lab.lblHome.on=g;
+  if(s.yearMode){
+    [lab.lblYou,lab.lblHome,lab.lblUmbra,lab.lblPen,lab.lblAnt,lab.lblEShadow].forEach(l=>l.on=false);
+    lab.you.visible=lab.homeMark.visible=lab.earthShadow.visible=false;
+  }
   const upTxt=el=> el>0 ? ` · ${Math.round(el/DEG)}° up` : ' · below the horizon';
   lab.lblSun.opt.nearText = s.ground ? 'Sun'+upTxt(G.sunEl) : 'Sun'; lab.lblSun.opt.shortText = lab.lblSun.opt.nearText;
   const moonTxt = s.ground ? 'Moon'+upTxt(G.moonEl) : 'Moon'; if(lab.lblMoon.text!==moonTxt){ lab.lblMoon.text=moonTxt; lab.lblMoon.el.textContent=moonTxt; }
@@ -1119,10 +1214,13 @@ function phaseName(l){ l=((l%360)+360)%360; if(l<10||l>350) return 'New Moon —
 
 function updateLabUI(){
   const s=state;
+  if(s.yearMode){ yearTour.render(); return; }
+  const phase=s.real&&s.eph?s.eph.elong:s.lambda;
   let key;
-  if(G.solar) key = G.solarKind==='none' ? (Math.abs(((s.lambda+180)%360)-180)<20 ? 'none-solar':'between') : G.solarKind;
-  else key = G.lunarKind==='none' ? (Math.abs(((s.lambda%360)+360)%360-180)<20 ? 'none-lunar':'between') : G.lunarKind;
+  if(G.solar) key = G.solarKind==='none' ? (Math.abs(((phase+180)%360)-180)<20 ? 'none-solar':'between') : G.solarKind;
+  else key = G.lunarKind==='none' ? (Math.abs(((phase%360)+360)%360-180)<20 ? 'none-lunar':'between') : G.lunarKind;
   const c=COPY[key]; $('#exTitle').textContent=c.title; $('#headLab').textContent=c.title; $('#exKid').innerHTML=c.kid; $('#exMore').innerHTML=c.more; $('#exSwatch').style.background=c.sw; $('#exSwatch').style.color=c.sw;
+  $('#yearShortcut').hidden=s.real||s.preset!=='none';
   let st='';
   if(G.solar){
     if(G.hit){ const m=(G.Lu-G.tHit)*KM*G.k; st = G.solarKind==='total' ? `The dark tip of the Moon's shadow reaches the ground with <b>${fmtKm(m)}</b> to spare — so it's <b>total</b> somewhere on Earth.` : `The dark tip of the Moon's shadow runs out <b>${fmtKm(-m)}</b> above the ground — so it's <b>annular</b> (a ring) instead of total.`; }
@@ -1413,12 +1511,15 @@ function setSite(key){
   if(state.home){ applyGeometry(); setCamera('home'); }
 }
 function setLabMode(mode){
+  if(mode==='year'){ yearTour.enter(); return; }
+  $('#yearError').hidden=true;
+  if(state.yearMode) yearTour.leave();
   const real = mode==='real';
   if(state.real===real) return;
   if(real && !window.Astronomy){ $('#eclNote').textContent='The real-sky library did not load, so this mode is unavailable.'; return; }
   state.real=real; $$('#labMode button').forEach(b=>b.classList.toggle('on', b.dataset.labmode===mode));
   $('#realBlock').hidden=!real; $('#sandboxBlock').hidden=real; $('#sandboxBlock2').hidden=real;
-  state.playing=state.playingEclipse=state.playingDay=false; state.playHours=state.playDays=false;
+  state.playing=state.playingEclipse=state.playingDay=false; state.playHours=state.playDays=state.playScrub=false;
   if(real){
     buildEclipseList();
     if(state.labScale!=='true'){ setLabScale('true'); }       // the real sky has to be at true scale to be right
@@ -1693,16 +1794,20 @@ saved.lab={target:V(0,0,0), radius:80, theta:anglesOf(V(-0.18,0.5,-0.85)).theta,
 
 function switchView(v, opts={}){
   if(state.view===v) return;
+  if(state.yearMode) yearTour.pause();
   const fade=$('#fade'); fade.classList.add('on');
   const go=()=>{
     if(state.view!=='simple') saved[state.view]=controls.save();
     state.view=v;
+    document.body.classList.toggle('year-active',v==='lab'&&state.yearMode);
+    $('#yearMarkers').hidden=v!=='lab'||!state.yearMode;
+    yearTour.layoutOverview();
     $$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.view===v));
     $('#panelSystem').hidden = v!=='system'; $('#panelLab').hidden = v!=='lab'; $('#gauge').hidden = true;
     $('#panelSimple').hidden = v!=='simple'; $('#simpleCanvas').hidden = v!=='simple'; $('#sky').hidden = v==='system';
     labels.hideAll(); sysLabels.hideAll();
     if(v==='simple'){ controls.enabled=false; lab.dome.visible=false; simple.enter(); }   // the 3D scene sleeps behind the flat picture
-    else if(v==='lab'){ controls.cam=lab.cam; controls.load(saved.lab); state.ground=false; controls.enabled=true; if(opts.preset){ applyPreset(opts.preset); } else { dirty=true; applyGeometry(); setCamera(opts.cam||state.camMode); } }
+    else if(v==='lab'){ controls.cam=lab.cam; controls.load(saved.lab); state.ground=false; controls.enabled=true; if(opts.preset){ applyPreset(opts.preset); } else if(state.yearMode){ yearTour.show(); } else { dirty=true; applyGeometry(); setCamera(opts.cam||state.camMode); } }
     else { controls.cam=sys.cam; controls.look=null; controls.load(saved.system||controls.save()); controls.enabled=true; lab.dome.visible=false; $('#hint').textContent='Drag to spin · Scroll or pinch to zoom · Right-drag or two fingers to slide · Click a name to fly there'; }
     onResize();
     fade.classList.remove('on');
@@ -1731,6 +1836,7 @@ $('#planetButtons').addEventListener('click',e=>{ const b=e.target.closest('butt
 $$('.seg button[data-scale]').forEach(b=>b.addEventListener('click',()=>setScale(b.dataset.scale)));
 $$('#labScale button').forEach(b=>b.addEventListener('click',()=>setLabScale(b.dataset.labscale)));
 $$('#labMode button').forEach(b=>b.addEventListener('click',()=>setLabMode(b.dataset.labmode)));
+$('#yearShortcut').addEventListener('click',()=>setLabMode('year'));
 $('#dtInput').addEventListener('change',e=>{ const d=new Date(e.target.value); if(!isNaN(d)){ state.playHours=state.playDays=state.playScrub=false; setBase(d.getTime()); configureScrub(); } });
 $('#dtNow').addEventListener('click',()=>{ state.playHours=state.playDays=state.playScrub=false; state.selEclipse=null; state.local=null; $('#eclSelect').value=''; $('#eclNote').textContent=''; setBase(Date.now()); configureScrub(); });
 $('#dtTonight').addEventListener('click',()=>{ const d=new Date(); if(d.getHours()>=21) d.setDate(d.getDate()+1); d.setHours(21,0,0,0); state.playHours=state.playDays=state.playScrub=false; setBase(d.getTime()); configureScrub(); });
@@ -1793,12 +1899,22 @@ $('#gaugeBtn').addEventListener('click',()=>{
   setFollow(body);   // following frames it either way: centred when zoomed in, horizon in shot when zoomed out
   updateLabUI();
 });
-window.addEventListener('keydown',e=>{ if(e.key===' '&&state.view==='lab'&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='BUTTON'){ e.preventDefault(); state.playing=!state.playing; state.preset=null; dirty=true; } });
+window.addEventListener('keydown',e=>{
+  if(e.key!==' '||state.view!=='lab'||e.repeat||document.activeElement.closest('input,button,select,textarea,[contenteditable=true]')) return;
+  e.preventDefault();
+  if(state.yearMode) yearTour.toggle();
+  else if(state.real){ state.playDays=!state.playDays; state.playHours=state.playScrub=false; dirty=true; }
+  else { state.playing=!state.playing; state.preset=null; dirty=true; }
+});
+
+/*YEAR_UI*/
 
 function onResize(){
   const w=window.innerWidth, h=window.innerHeight; renderer.setSize(w,h,false);
   [lab.cam,sys.cam].forEach(c=>{ c.aspect=w/h; c.updateProjectionMatrix(); });
+  yearTour.layoutOverview();
   computeViewRect();
+  if(state.yearMode&&state.view==='lab') yearTour.camera(1,true);
   if(state.view==='lab' && G) drawSky();
 }
 window.addEventListener('resize',onResize); onResize();
@@ -1812,6 +1928,7 @@ function frame(now){
   if(state.view==='simple'){ simple.frame(dt); requestAnimationFrame(frame); return; }
   const w=window.innerWidth, h=window.innerHeight;
   if(state.view==='lab'){
+    if(state.yearMode) yearTour.tick(dt);
     if(state.playing){ state.lambda=(state.lambda+dt*state.speed)%360; $('#sLam').value=state.lambda; dirty=true; }
     if(state.playingEclipse){ state.eclU+=dt*(2/26); if(state.eclU>=1){ state.eclU=1; state.playingEclipse=false; }
       // eased so the Moon dawdles through the middle: real eclipses are an hour of partial each side and a few minutes of total
@@ -1827,6 +1944,7 @@ function frame(now){
     }
     if(state.labK!==state.labKTarget){ const k=REDUCED?1:Math.min(1,(performance.now()-state.labKT0)/1600); state.labK=lerpLog(state.labKFrom,state.labKTarget,ease(k)); dirty=true; if(k>=1){ state.labK=state.labKTarget; applyGeometry(); if(!state.ground) setCamera(state.camMode); } }
     if(dirty) applyGeometry();
+    if(state.yearMode&&yearTour.playing) yearTour.camera(dt);
     let day=0;
     if(state.ground){ day=updateGroundCamera(); updateGauge(); } else { $('#gauge').hidden=true; controls.update(); lab.dome.visible=false; lab.ground.visible=false; lab.altGrid.visible=false; lab.earth.visible=true; lab.atmo.visible=true; lab.lblAlt.forEach(l=>l.on=false); lab.lblHorizon.on=false; lab.moonMat.uniforms.airlight.value.set(0,0,0); }
     const cov = state.ground && G.solar && G.sunEl>0 ? G.cov : 0;
@@ -1836,6 +1954,7 @@ function frame(now){
     lab.stars.material.opacity = 1-day; lab.sky.material.opacity = 1-day; lab.sky.visible = !state.ground || day<0.97;
     renderer.render(lab.scene, lab.cam);
     labels.update(lab.cam,w,h);
+    if(state.yearMode) yearTour.markers();
   } else {
     updateSystemMotion(dt); controls.update();
     // floating origin: shift the scene so the camera target is at (0,0,0), render, then put the camera back
@@ -1853,6 +1972,6 @@ layoutSystem(0);
 computeViewRect();
 applyGeometry();
 requestAnimationFrame(frame);
-window.__eclipseLab={ state, controls, lab, THREE, get viewRect(){return viewRect;}, get G(){ return G; }, computeGeometry, applyPreset, setCamera, setFollow, switchView, focusOn, setScale, sys, KM, Bz, BESSEL, besselLocal, edgeSitesFor };
+window.__eclipseLab={ state, controls, lab, THREE, get viewRect(){return viewRect;}, get G(){ return G; }, computeGeometry, applyPreset, setCamera, setFollow, switchView, focusOn, setScale, sys, KM, Bz, BESSEL, besselLocal, edgeSitesFor, yearTour, setLabMode, computeEphemeris };
 })();
 </script>
