@@ -186,6 +186,11 @@
   #yearStory h3{font-family:var(--display);font-size:18px;margin:0 0 6px;line-height:1.25}
   #yearStory p{font-size:13px;margin:0;line-height:1.5}
   #yearPlay{margin-top:0}
+  #yearSunView{display:flex;align-items:center;gap:12px;margin:10px 0;padding:10px;background:rgba(255,200,87,.05);border:1px solid var(--line);border-radius:12px}
+  #yearSunView svg{width:96px;height:96px;flex-shrink:0}
+  #yearSunView .eyebrow{font-size:9px;margin:0 0 5px}
+  #yearSunView strong{display:block;font-size:14px;color:var(--gold)}
+  #yearSunView p{font-size:12px;line-height:1.45;margin:5px 0 0}
   #yearBlock .year-controls{justify-content:space-between}
   #yearBlock .year-speed{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-top:10px}
   #yearSpeed{width:78px;margin:0;padding:5px 8px}
@@ -205,11 +210,19 @@
   #yearMarkers{position:fixed;inset:0;pointer-events:none;z-index:3}
   #yearMarkers i{position:absolute;display:block;width:18px;height:18px;border:1px solid var(--sky);border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 10px rgba(108,184,255,.35)}
   #yearMarkers i+ i{width:14px;height:14px;border-color:var(--moon);box-shadow:none}
+  #yearEclipseMarker{position:absolute;transform:translate(-50%,-50%);width:22px;height:22px;border:1px dashed var(--gold);border-radius:50%;filter:drop-shadow(0 1px 2px #000)}
+  #yearEclipseMarker span{position:absolute;left:50%;top:28px;transform:translateX(-50%);white-space:nowrap;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:4px 7px;color:var(--gold);font-size:11px}
   .year-active #panelLab .explain,.year-active #globalStatus,.year-active #camRow,.year-active #camHeading,.year-active #labToggles,.year-active #yearShortcut{display:none}
   @media(max-width:900px){
     #yearOverview{top:82px;left:auto;right:8px;width:116px;padding:7px}
     #yearOverview .eyebrow{font-size:8px;margin:0 0 3px}
     #yearOverview p{display:none}
+    .year-active.year-eclipse-close #yearOverview{visibility:hidden}
+    #yearSunView{position:fixed;top:82px;right:8px;width:116px;box-sizing:border-box;flex-direction:column;gap:3px;margin:0;padding:7px;z-index:5;background:var(--panel)}
+    #yearSunView svg{width:82px;height:82px}
+    #yearSunView .eyebrow{font-size:7px;margin:0 0 3px}
+    #yearSunView strong{font-size:10px;line-height:1.3}
+    #yearSunView p{display:none}
     #yearBlock{display:flex;flex-direction:column}
     #yearBlock h2,#yearBlock .year-intro{display:none}
     #yearBlock .year-speed{order:1}
@@ -224,13 +237,14 @@
   }
   @media(max-width:900px) and (orientation:landscape){
     #yearOverview{left:8px;right:auto;width:108px}
+    #yearSunView{left:8px;right:auto;width:108px}
   }
 </style>
 
 <canvas id="gl" aria-label="3D view of the Sun, Earth and Moon"></canvas>
 <canvas id="simpleCanvas" hidden aria-label="Eclipse Simple: a flat picture of the Sun, Moon and Earth you can drag about"></canvas>
 <div id="labels" aria-hidden="true"></div>
-<div id="yearMarkers" hidden aria-hidden="true"><i></i><i></i></div>
+<div id="yearMarkers" hidden aria-hidden="true"><i></i><i></i><div id="yearEclipseMarker" hidden><span>Eclipse centre</span></div></div>
 <div id="fade"></div>
 <div id="loading"><div class="orb"></div><p>Loading the planets…</p></div>
 <div id="err"><strong>The 3D view couldn't start.</strong><br><span id="errMsg">Your browser may not support WebGL.</span></div>
@@ -312,6 +326,15 @@
     <div id="yearDate"></div><div id="yearPhase"></div>
     <div id="yearStory" role="status" aria-live="polite" aria-atomic="true"><h3 id="yearTitle"></h3><p id="yearText"></p></div>
     <button class="chip sm" id="yearDetail" hidden>Inspect the shadow →</button>
+    <div id="yearSunView" hidden>
+      <svg viewBox="0 0 112 112" role="img" aria-label="The Sun seen from the marked eclipse centre" id="yearSunDiagram">
+        <defs><radialGradient id="yearCoronaGradient"><stop offset="45%" stop-color="#fff4cf" stop-opacity=".85"/><stop offset="100%" stop-color="#fff4cf" stop-opacity="0"/></radialGradient></defs>
+        <circle id="yearSunCorona" cx="56" cy="56" r="55" fill="url(#yearCoronaGradient)"/>
+        <circle cx="56" cy="56" r="35" fill="#ffd16d"/>
+        <circle id="yearSunMoon" cx="56" cy="56" r="32" fill="#070a16"/>
+      </svg>
+      <div><div class="eyebrow">From the marked spot</div><strong id="yearSunTitle"></strong><p id="yearSunText"></p></div>
+    </div>
     <div class="slider"><label for="yearScrub">Move through the year <output id="yearProgress"></output></label><input type="range" id="yearScrub" min="0" max="141" step="0.1" value="0" aria-label="Time through the guided year"><div class="ends"><span>Jan 2027</span><span>Dec 2027</span></div></div>
     <div id="yearCounter"></div>
     <aside id="yearOverview" aria-label="Earth's progress around the Sun">
@@ -710,6 +733,14 @@ function bodyMaterial(map, opts={}){
     ambient:{value:opts.ambient!==undefined?opts.ambient:0.04}, isEarth:{value:opts.isEarth?1:0}, redTint:{value:opts.redTint?1:0}, airlight:{value:new THREE.Vector3()} },
     vertexShader:BODY_VERT, fragmentShader:BODY_FRAG });
 }
+// A transparent outer cone whose distant end fades away instead of stopping flat.
+function fadingShadowMaterial(color,opacity){
+  return new THREE.ShaderMaterial({transparent:true,side:THREE.DoubleSide,depthWrite:false,
+    uniforms:{tint:{value:new THREE.Color(color)},alpha:{value:opacity},fadeStart:{value:0},fadeEnd:{value:0}},
+    vertexShader:`varying float vDistance; void main(){vDistance=position.y;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+    fragmentShader:`uniform vec3 tint; uniform float alpha; uniform float fadeStart; uniform float fadeEnd; varying float vDistance;
+      void main(){float fade=fadeEnd>fadeStart?1.0-smoothstep(fadeStart,fadeEnd,vDistance):1.0;gl_FragColor=vec4(tint,alpha*fade);}`});
+}
 // Sky dome for the ground views: drawn first with no depth, so the Sun, Moon and ground paint over it.
 const SKY_MAT = new THREE.ShaderMaterial({ uniforms:{ sunDir:{value:new THREE.Vector3(1,0,0)}, up:{value:new THREE.Vector3(0,1,0)}, day:{value:1} },
   side:THREE.BackSide, depthTest:false, depthWrite:false,
@@ -1057,7 +1088,7 @@ const labels = new LabelLayer($('#labels'));
   lab.moon=new THREE.Mesh(new THREE.SphereGeometry(RM,128,96), lab.moonMat); S.add(lab.moon);
   const coneMat=(c,o)=>new THREE.MeshBasicMaterial({color:c, transparent:true, opacity:o, side:THREE.DoubleSide, depthWrite:false});
   lab.moonShadow=new THREE.Group(); S.add(lab.moonShadow);
-  lab.umbra=new THREE.Mesh(new THREE.BufferGeometry(), coneMat(0x04050f,0.62)); lab.antumbra=new THREE.Mesh(new THREE.BufferGeometry(), coneMat(0x8a5218,0.28)); lab.penumbra=new THREE.Mesh(new THREE.BufferGeometry(), coneMat(0x232a4d,0.22));
+  lab.umbra=new THREE.Mesh(new THREE.BufferGeometry(), coneMat(0x04050f,0.62)); lab.antumbra=new THREE.Mesh(new THREE.BufferGeometry(), fadingShadowMaterial(0x8a5218,0.28)); lab.penumbra=new THREE.Mesh(new THREE.BufferGeometry(), fadingShadowMaterial(0x232a4d,0.22));
   [lab.umbra,lab.antumbra,lab.penumbra].forEach(m=>{ m.renderOrder=2; lab.moonShadow.add(m); });
   lab.earthShadow=new THREE.Group(); S.add(lab.earthShadow);
   lab.eUmbra=new THREE.Mesh(new THREE.BufferGeometry(), coneMat(0x070a1f,0.42)); lab.ePenumbra=new THREE.Mesh(new THREE.BufferGeometry(), coneMat(0x1c2550,0.16));
@@ -1122,7 +1153,8 @@ function applyGeometry(){
   lab.earthMat.uniforms.sunPos.value.copy(G.sunPos); lab.earthMat.uniforms.occPos.value.copy(G.moonPos); lab.earthMat.uniforms.sunR.value=G.RS; lab.moonMat.uniforms.sunR.value=G.RS;
   lab.moonMat.uniforms.sunPos.value.copy(G.sunPos); lab.moonMat.uniforms.occPos.value.copy(ORIGIN);
   ATMO_MAT.uniforms.sunPos.value.copy(G.sunPos);
-  const Lend = G.hit ? G.cPar : G.cPar+3;
+  const extent=s.yearMode?window.EclipseYearCore.shadowExtent(G.d,G.cPar,G.Lu):null;
+  const Lend = extent?extent.length:G.hit?G.cPar:G.cPar+3;
   lab.moonShadow.position.copy(G.moonPos); lab.moonShadow.quaternion.setFromUnitVectors(Y_UP,G.axis);
   setGeo(lab.umbra, frustumGeo(RM,0,G.Lu));
   if(Lend>G.Lu){ lab.antumbra.visible=true; setGeo(lab.antumbra, frustumGeo(0,(Lend-G.Lu)*G.tanU,Lend-G.Lu)); lab.antumbra.position.y=G.Lu; } else lab.antumbra.visible=false;
@@ -1131,11 +1163,15 @@ function applyGeometry(){
   setGeo(lab.eUmbra, frustumGeo(RE, RE-Le*(RS-RE)/DS, Le)); setGeo(lab.ePenumbra, frustumGeo(RE, RE+Le*(RS+RE)/DS, Le));
   const closeUp = s.ground || s.camMode==='shadow';
   const mo=(G.solar?1:0.45)*(closeUp?0.15:1), eo=(G.solar?0.45:1)*(s.camMode==='moon'||closeUp?0.4:1);
-  // Give the teaching tour a clearly visible blue shadow without changing its size.
-  lab.penumbra.material.color.setHex(s.yearMode?0x438cff:0x232a4d);
-  lab.umbra.material.opacity=(s.yearMode?0.82:0.62)*mo;
-  lab.penumbra.material.opacity=(s.yearMode?0.52:0.22)*mo;
-  lab.antumbra.material.opacity=0.28*mo; lab.eUmbra.material.opacity=0.34*eo; lab.ePenumbra.material.opacity=0.16*eo;
+  lab.penumbra.material.uniforms.tint.value.setHex(s.yearMode?0x586e95:0x232a4d);
+  lab.umbra.material.opacity=(s.yearMode?0.72:0.62)*mo;
+  lab.penumbra.material.uniforms.alpha.value=(s.yearMode?0.36:0.22)*mo;
+  lab.antumbra.material.uniforms.alpha.value=0.28*mo;
+  for(const [mesh,offset] of [[lab.penumbra,0],[lab.antumbra,G.Lu]]){
+    mesh.material.uniforms.fadeStart.value=extent?extent.fadeStart-offset:0;
+    mesh.material.uniforms.fadeEnd.value=extent?extent.length-offset:0;
+  }
+  lab.eUmbra.material.opacity=0.34*eo; lab.ePenumbra.material.opacity=0.16*eo;
   lab.moonShadow.visible=lab.earthShadow.visible=s.shadows&&!s.ground;   // from the ground the beams are just haze
   const realOrbit=s.real&&s.eph&&s.eph.orbit;
   if(realOrbit){

@@ -62,6 +62,11 @@
   function counts(tour,ms){
     return tour.events.filter(e=>e.ms<=ms).reduce((out,e)=>{out[e.kind]=(out[e.kind]||0)+1;out.totalMoons++;return out;},{totalMoons:0,none:0,annular:0,total:0});
   }
+  // The outer shadow continues into space; fade the illustration well past Earth.
+  // This controls its visible extent, never the cone angles or the umbra's true tip.
+  function shadowExtent(distance,projection,umbraLength){
+    return {fadeStart:Math.max(distance*1.1,projection+distance*.2),length:Math.max(distance*2.6,umbraLength+distance*.8)};
+  }
   // Express the instantaneous orbital plane in the lab's Sun-facing frame.
   function orbitFrame(A,ms,sunLon){
     const time=A.MakeTime(new Date(ms));
@@ -74,5 +79,5 @@
     const d=Math.hypot(n[0],n[2]);
     return {normal:n,node:[n[2]/d,0,-n[0]/d],inclination:Math.acos(clamp(n[1],-1,1))*180/Math.PI};
   }
-  root.EclipseYearCore={build,sample,advance,step,counts,orbitFrame};
+  root.EclipseYearCore={build,sample,advance,step,counts,orbitFrame,shadowExtent};
 })(typeof window==='undefined'?globalThis:window);

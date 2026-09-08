@@ -59,6 +59,18 @@ test('the real orbit guide lies in the Moon position/velocity plane throughout t
   assert.ok(nodes.some(n=>n[0]<-.8)&&nodes.some(n=>n[0]>.8),'The crossing points turn relative to the Sun through the year');
 });
 
+test('the outer shadow stays visible past Earth and fades beyond its true umbral tip',()=>{
+  for(let ms=tour.start;ms<=tour.end;ms+=86400000){
+    const moon=A.EclipticGeoMoon(new Date(ms)),sun=A.SunPosition(new Date(ms));
+    const d=moon.dist*149597870.7/6371;
+    const projection=d*Math.cos((moon.lon-sun.elon)*Math.PI/180)*Math.cos(moon.lat*Math.PI/180);
+    const tip=60,extent=C.shadowExtent(d,projection,tip);
+    assert.ok(extent.fadeStart>projection+1,'Fading begins beyond the far side of Earth');
+    assert.ok(extent.length>tip&&extent.length>d*2,'The outer cones extend well beyond the Moon–Earth separation');
+    assert.ok(extent.fadeStart<extent.length,'The tail has a non-empty fade interval');
+  }
+});
+
 test('normal and delayed playback reach every teaching stop at all supported speeds',()=>{
   for(const speed of [.5,1,2]) for(const delta of [1/30,10]){
     let elapsed=0,lastMs=tour.start;

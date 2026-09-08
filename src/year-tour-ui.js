@@ -10,6 +10,11 @@ const yearTour=(()=>{
     // A backdrop-filtered ancestor would trap position:fixed inside the panel.
     if(overview.parentElement!==document.body) document.body.append(overview);
     overview.hidden=!state.yearMode||state.view!=='lab';
+    const sunView=$('#yearSunView');
+    // On phones the Sun view stays beside the globe, above the scrolling controls.
+    if(window.innerWidth<=900){ if(sunView.parentElement!==document.body) document.body.append(sunView); }
+    else if(sunView.parentElement!==$('#yearBlock')) $('#yearDetail').after(sunView);
+    if(overview.hidden) sunView.hidden=true;
   }
   function show(){
     document.body.classList.add('year-active');
@@ -79,8 +84,9 @@ const yearTour=(()=>{
   function pause(){ if(automaticCloseup()) detail=true; playing=false; controls.enabled=true; if(state.yearMode) render(); }
   function toggle(){
     if(!state.yearMode) return;
+    if(playing){ pause(); return; }
     if(elapsed>=tour.duration) elapsed=0;
-    playing=!playing; controls.enabled=!playing; detail=false;
+    playing=true; controls.enabled=false; detail=false;
     stopClocks(); accumulator=0; applyTime();
   }
   function seek(seconds){
@@ -109,8 +115,22 @@ const yearTour=(()=>{
     $('#yearDate').textContent=new Date(current.ms).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'});
     $('#yearPhase').textContent=`${phaseName(state.eph.elong).split(' — ')[0]} · ${fmtKm(state.eph.moonKm)} away · UTC`;
     const event=current.hold?tour.events[current.eventIndex]:null;
+    const close=detail||automaticCloseup();
+    const eclipseClose=close&&event&&event.kind!=='none'&&G&&G.hit;
+    document.body.classList.toggle('year-eclipse-close',!!eclipseClose);
     $('#yearDetail').hidden=!event;
-    $('#yearDetail').textContent=detail||automaticCloseup()?'← Show the whole alignment':'Inspect the shadow →';
+    $('#yearDetail').textContent=close?'← Show the whole alignment':'Inspect the shadow →';
+    $('#yearSunView').hidden=!eclipseClose;
+    if(eclipseClose){
+      const annular=event.kind==='annular', ratio=G.aM/G.aS;
+      $('#yearSunMoon').setAttribute('r',35*ratio);
+      $('#yearSunMoon').setAttribute('cx',56+35*G.skyX/G.aS);
+      $('#yearSunMoon').setAttribute('cy',56-35*G.skyY/G.aS);
+      $('#yearSunCorona').style.display=annular?'none':'';
+      $('#yearSunTitle').textContent=annular?`Ring of fire · ${Math.round(G.cov*100)}% covered`:'The whole Sun is hidden';
+      $('#yearSunText').textContent=annular?'The ring is seen in the sky. On Earth, it makes a dim patch around the marker.':'The marker locates the dark inner shadow. From there, the Moon covers the Sun and its corona appears.';
+      $('#yearSunDiagram').setAttribute('aria-label',annular?'A ring of sunlight around the smaller Moon, as seen from the marked spot':'The Moon fully covers the Sun, with its corona visible around it');
+    }
     const key=current.complete?'complete':elapsed===0?'intro':event?`event-${current.eventIndex}`:`travel-${current.eventIndex}`;
     if(key!==storyKey){
       storyKey=key;
@@ -164,12 +184,11 @@ const yearTour=(()=>{
     const focus=current.hold?1:REDUCED?0:smooth(.68,1,current.progress);
     const d=G.d, target=G.moonPos.clone().multiplyScalar(.5*focus);
     let fit=frame3(V(.025,lerp(.7,.24,focus),-1),lerp(d+3,d*.54+2,focus),lerp(d*.6+2,d*.12+2,focus),45);
-    const event=current.hold?tour.events[current.eventIndex]:null;
     const close=detail||automaticCloseup();
     if(close){
-      target.copy(G.q).multiplyScalar(.5);
-      const span=Math.max(1.8,G.rho*.6+1.4);
-      fit=frame3(G.hit?G.hitPoint.clone().addScaledVector(G.north,.25):V(.8,.18,-1),span,span,45);
+      target.copy(G.hit?ORIGIN:G.q.clone().multiplyScalar(.5));
+      const span=G.hit?1.3:Math.max(1.8,G.rho*.6+1.4);
+      fit=frame3(G.hit?G.hitPoint.clone().normalize():V(.8,.18,-1),span,span,45);
     }
     [lab.orbitGroup,lab.eclRing,lab.plane,lab.heightLine,lab.footMark,lab.moonShadow].forEach(object=>object.visible=!close);
     [lab.lblNodeA,lab.lblNodeB,lab.lblPlane,lab.lblSun].forEach(label=>label.on=!close);
@@ -190,6 +209,15 @@ const yearTour=(()=>{
       element.hidden=radius>10||p.z<-1||p.z>1||x<viewRect.x0||x>viewRect.x1||y<viewRect.y0||y>viewRect.y1;
       element.style.left=x+'px'; element.style.top=y+'px';
     });
+    const marker=$('#yearEclipseMarker');
+    marker.hidden=true;
+    if(!(detail||automaticCloseup())||!current.hold||!G.hit||tour.events[current.eventIndex].kind==='none') return;
+    const point=G.hitPoint, towardCamera=lab.cam.position.clone().sub(point);
+    if(point.dot(towardCamera)<=0) return;
+    const p=point.clone().project(lab.cam), x=(p.x+1)*window.innerWidth/2,y=(1-p.y)*window.innerHeight/2;
+    const earthRadius=RE/lab.cam.position.length()/Math.tan(lab.cam.fov*DEG/2)*window.innerHeight/2;
+    marker.hidden=earthRadius<40||p.z<-1||p.z>1||x<viewRect.x0+55||x>viewRect.x1-55||y<viewRect.y0+15||y>viewRect.y1-55;
+    marker.style.left=x+'px'; marker.style.top=y+'px';
   }
   $('#yearPlay').addEventListener('click',toggle);
   $('#yearDetail').addEventListener('click',()=>{pause();detail=!detail;camera(1,true);render();});
