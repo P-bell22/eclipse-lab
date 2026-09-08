@@ -3,16 +3,44 @@
   'use strict';
   const DAY=86400000, AU_KM=149597870.7;
   const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+  const kinds=['partial','annular','total','hybrid'];
+  function years(elements){return [...new Set(Object.keys(elements).map(key=>+key.slice(0,4)))].sort((a,b)=>a-b);}
+  // Pick an illustrative sunlit location when the central shadow axis misses Earth.
+  // Keep the Sun at least 3 degrees up so the inset shows a clear disc above the horizon.
+  function sunlitObserver(B,bessel,t,kind){
+    let best=null;
+    const consider=(lat,lon)=>{
+      lat=clamp(lat,-90,90); lon=((lon+540)%360)-180;
+      const p=bessel.siteEF(lat,lon,0);
+      if(bessel.sunAltAt(B,t,p)<3) return;
+      const coverage=bessel.coverageAt(B,t,p), cov=coverage.cov;
+      // Rare non-central total/annular eclipses need a point inside the grazing cone.
+      const score=kind==='partial'?cov:Math.abs(coverage.aM-coverage.aS)-coverage.th;
+      if(cov>0&&(!best||score>best.score)) best={lat,lon,cov,score};
+    };
+    for(let lat=-90;lat<=90;lat+=5) for(let lon=-180;lon<180;lon+=5) consider(lat,lon);
+    if(!best) throw new Error('No sunlit viewing location was found for this eclipse.');
+    for(const step of [1,.2,.04]){
+      const centre=best;
+      for(let i=-5;i<=5;i++) for(let j=-5;j<=5;j++) consider(centre.lat+i*step,centre.lon+j*step);
+    }
+    if(kind!=='partial'&&best.score<0) throw new Error('The viewing location does not show the catalogued eclipse type.');
+    return {lat:best.lat,lon:best.lon,cov:best.cov};
+  }
   function build(A, elements, bessel, year=2027){
     if(!A) throw new Error('The astronomy library is unavailable.');
+    if(!years(elements).includes(year)) throw new Error('Eclipse data is unavailable for this year.');
     const start=Date.UTC(year,0,1), end=Date.UTC(year+1,0,1)-1;
     const eclipses=[];
     let eclipse=A.SearchGlobalSolarEclipse(new Date(start));
     while(eclipse.peak.date.getTime()<=end){
       const key=eclipse.peak.date.toISOString().slice(0,10), B=elements[key];
-      let ms=eclipse.peak.date.getTime();
-      if(B&&bessel) ms=B.t0+bessel.greatest(B).t*3600000-B.dT*1000;
-      eclipses.push({ms,kind:eclipse.kind,key});
+      if(!B||!bessel) throw new Error(`Missing eclipse data for ${key}.`);
+      const peak=bessel.greatest(B), ms=B.t0+peak.t*3600000-B.dT*1000;
+      // The NASA type includes hybrids and grazing events classified as partial by the ephemeris library.
+      const kind=B.kind||(B.hyb?'hybrid':eclipse.kind);
+      const observer=!peak.ground?sunlitObserver(B,bessel,peak.t,kind):null;
+      eclipses.push({ms,kind,key,observer});
       eclipse=A.NextGlobalSolarEclipse(eclipse.peak);
     }
     const events=[];
@@ -23,7 +51,7 @@
       if(phaseMs<from) throw new Error('The new-moon dates are out of order.');
       const hit=eclipses.find(e=>Math.abs(e.ms-phaseMs)<2*DAY);
       const ms=hit?hit.ms:phaseMs, moon=A.EclipticGeoMoon(new Date(ms));
-      events.push({phaseMs,ms,kind:hit?hit.kind:'none',beta:moon.lat,moonKm:moon.dist*AU_KM,key:hit?hit.key:null});
+      events.push({phaseMs,ms,kind:hit?hit.kind:'none',beta:moon.lat,moonKm:moon.dist*AU_KM,key:hit?hit.key:null,observer:hit?hit.observer:null});
       from=phaseMs+DAY;
     }
     if(!events.length) throw new Error('No new moons were found for this year.');
@@ -60,7 +88,14 @@
     return ([...tour.events].reverse().find(e=>e.stop<elapsed-1e-6)||{stop:0}).stop;
   }
   function counts(tour,ms){
-    return tour.events.filter(e=>e.ms<=ms).reduce((out,e)=>{out[e.kind]=(out[e.kind]||0)+1;out.totalMoons++;return out;},{totalMoons:0,none:0,annular:0,total:0});
+    return tour.events.filter(e=>e.ms<=ms).reduce((out,e)=>{out[e.kind]++;out.totalMoons++;return out;},{totalMoons:0,none:0,partial:0,annular:0,total:0,hybrid:0});
+  }
+  function summary(tour){
+    const tally=counts(tour,tour.end), eclipses=tally.totalMoons-tally.none;
+    const list=kinds.filter(kind=>tally[kind]).map(kind=>`${tally[kind]} ${kind} eclipse${tally[kind]===1?'':'s'}`);
+    const mix=list.length<2?list[0]:list.slice(0,-1).join(', ')+' and '+list[list.length-1];
+    return {title:`${tally.totalMoons} new moons. ${eclipses} solar eclipses.`,
+      copy:`In ${tour.year}, ${tally.none} new moons missed Earth completely. The year brought ${mix}. ${tally.total+tally.hybrid?'Totality was possible only along a narrow path.':'No alignment produced totality this year.'}`};
   }
   // The outer shadow continues into space; fade the illustration well past Earth.
   // This controls its visible extent, never the cone angles or the umbra's true tip.
@@ -79,5 +114,5 @@
     const d=Math.hypot(n[0],n[2]);
     return {normal:n,node:[n[2]/d,0,-n[0]/d],inclination:Math.acos(clamp(n[1],-1,1))*180/Math.PI};
   }
-  root.EclipseYearCore={build,sample,advance,step,counts,orbitFrame,shadowExtent};
+  root.EclipseYearCore={build,sample,advance,step,counts,orbitFrame,shadowExtent,years,kinds,summary};
 })(typeof window==='undefined'?globalThis:window);

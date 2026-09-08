@@ -7,13 +7,18 @@ Live site: https://p-bell22.github.io/eclipse-lab/
 
 ## Watch a year
 
-In **Eclipse Lab → Watch a year**, press **Play year** for a guided tour of 2027 (2 minutes 21 seconds at normal speed).
-The tour follows all 13 new moons: 11 miss Earth, 6 February produces an annular eclipse, and 2 August produces a total eclipse.
-Two new moons fall in August; lunar cycles are not calendar months.
+In **Eclipse Lab → Watch a year**, choose any year from **2026–2050** and press **Play year**.
+The year picker and adjacent arrows switch years and pause at the start. Dates, new moons, eclipse types, explanations, totals and duration all follow the selected year.
+Enable **Continue into the next year** to play successive years. Each year ends with a short summary; playback stops at the end of 2050.
+
+The default 2027 tour takes 2 minutes 21 seconds and follows 13 new moons: 11 miss Earth, 6 February produces an annular eclipse, and 2 August produces a total eclipse.
+Other years have 12 or 13 new moons and different combinations of partial, annular, total and hybrid eclipses. For example, 2029 has four partial eclipses and no totality; 2031 includes a hybrid eclipse.
+Lunar cycles are not calendar months, so two new moons sometimes fall in the same month.
 
 Use Previous/Next, the dated new-moon buttons, or the timeline to pause at an alignment. Playback speeds are 0.5×, 1× and 2×.
 **Inspect the shadow** magnifies the Earth and its nearby shadow; the longer eclipse stops also zoom in during playback.
 At eclipse close-ups, a marker locates the eclipse centre and an inset shows the Sun as seen from that spot, including the annular ring of fire.
+For partial eclipses and rare grazing eclipses whose shadow axis misses Earth, the marker identifies an example sunlit location, with the Sun at least 3° above the horizon; it does not claim to mark the global maximum. Hybrid eclipses have their own explanation and show the local type at the marked spot.
 The outer shadow uses muted blue and fades into space beyond Earth; the umbra still ends at its physically calculated tip.
 The small year overview shows Earth travelling around the Sun with enlarged bodies and compressed distances. The main 3D lab stays at true scale.
 Eclipse types refer to what happens somewhere on Earth, not necessarily at the saved home location. Dates are UTC.
@@ -40,7 +45,7 @@ The editable sources are in `src/`. Edit `src/eclipse-lab.src.html` (or `src/sim
 which writes a fresh `index.html`. Commit and push, and Pages redeploys on its own.
 
 - `src/assets.js` holds the packed NASA texture maps (built by `src/build_assets.py` from a `tex/` folder of JPEGs, not included).
-- `src/bessel_data.js` holds the Besselian elements for every solar eclipse 2026–2050, from NASA/GSFC (Fred Espenak).
+- `src/bessel_data.js` holds the Besselian elements and NASA catalogue classification for every solar eclipse 2026–2050, from NASA/GSFC (Fred Espenak).
 - `src/vendor/astronomy.browser.min.js` is Astronomy Engine 2.1.19 (Don Cross, MIT).
 - `src/year-tour.js` calculates the new-moon schedule, presentation timing and real orbital plane; `src/year-tour-ui.js` connects it to the lab.
 

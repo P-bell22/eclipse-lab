@@ -186,6 +186,10 @@
   #yearStory h3{font-family:var(--display);font-size:18px;margin:0 0 6px;line-height:1.25}
   #yearStory p{font-size:13px;margin:0;line-height:1.5}
   #yearPlay{margin-top:0}
+  #yearBlock .year-choice{display:flex;align-items:center;gap:7px;margin:10px 0}
+  #yearChoice{flex:1;min-width:0;margin:0;padding:7px 10px}
+  #yearBlock .year-continue{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);margin:9px 0}
+  #yearContinue{accent-color:var(--gold)}
   #yearSunView{display:flex;align-items:center;gap:12px;margin:10px 0;padding:10px;background:rgba(255,200,87,.05);border:1px solid var(--line);border-radius:12px}
   #yearSunView svg{width:96px;height:96px;flex-shrink:0}
   #yearSunView .eyebrow{font-size:9px;margin:0 0 5px}
@@ -200,6 +204,8 @@
   #yearTimeline button.seen{color:var(--ink)}
   #yearTimeline button[data-kind=total].seen{color:var(--gold);border-color:rgba(255,200,87,.65)}
   #yearTimeline button[data-kind=annular].seen{color:var(--ember);border-color:rgba(255,138,61,.65)}
+  #yearTimeline button[data-kind=partial].seen{color:var(--sky);border-color:rgba(108,184,255,.5)}
+  #yearTimeline button[data-kind=hybrid].seen{color:var(--gold);border-color:var(--ember)}
   #yearTimeline button[aria-current=true]{outline:2px solid var(--sky);outline-offset:1px}
   #yearBlock button:focus-visible,#yearBlock select:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
   #yearOverview{position:fixed;top:110px;left:16px;width:196px;padding:12px;box-sizing:border-box;background:var(--panel);border:1px solid var(--line);border-radius:14px;z-index:4}
@@ -225,7 +231,7 @@
     #yearSunView p{display:none}
     #yearBlock{display:flex;flex-direction:column}
     #yearBlock h2,#yearBlock .year-intro{display:none}
-    #yearBlock .year-speed{order:1}
+    #yearBlock .year-speed,#yearBlock .year-continue{order:1}
     #yearBlock .slider,#yearCounter,#yearBlock>.eyebrow,#yearTimeline,#yearBlock>p:last-child{order:2}
     #yearDate{font-size:17px;margin-top:8px}
     #yearStory{min-height:0;margin:8px 0;padding:7px 10px}
@@ -315,7 +321,12 @@
 
   <div id="yearBlock" hidden>
     <h2>Why not every month?</h2>
-    <p class="year-intro">Follow 2027, new moon by new moon. Most shadows miss Earth. Once, everything falls into place.</p>
+    <p class="year-intro" id="yearIntro">Follow a year, new moon by new moon. See which shadows miss Earth and which reach it.</p>
+    <div class="year-choice" role="group" aria-label="Choose a tour year">
+      <button class="chip sm" id="yearEarlier" aria-label="Previous year">←</button>
+      <select id="yearChoice" aria-label="Tour year"></select>
+      <button class="chip sm" id="yearLater" aria-label="Next year">→</button>
+    </div>
     <button class="big" id="yearPlay">▶ Play year</button>
     <div class="row year-controls">
       <button class="chip sm" id="yearPrev" aria-label="Previous new moon">← Previous</button>
@@ -323,6 +334,7 @@
       <button class="chip sm" id="yearNext" aria-label="Next new moon">Next →</button>
     </div>
     <div class="year-speed"><label for="yearSpeed">Playback speed</label><select id="yearSpeed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select><span id="yearDuration"></span></div>
+    <label class="year-continue" id="yearContinueRow"><input type="checkbox" id="yearContinue"> Continue into the next year</label>
     <div id="yearDate"></div><div id="yearPhase"></div>
     <div id="yearStory" role="status" aria-live="polite" aria-atomic="true"><h3 id="yearTitle"></h3><p id="yearText"></p></div>
     <button class="chip sm" id="yearDetail" hidden>Inspect the shadow →</button>
@@ -335,7 +347,7 @@
       </svg>
       <div><div class="eyebrow">From the marked spot</div><strong id="yearSunTitle"></strong><p id="yearSunText"></p></div>
     </div>
-    <div class="slider"><label for="yearScrub">Move through the year <output id="yearProgress"></output></label><input type="range" id="yearScrub" min="0" max="141" step="0.1" value="0" aria-label="Time through the guided year"><div class="ends"><span>Jan 2027</span><span>Dec 2027</span></div></div>
+    <div class="slider"><label for="yearScrub">Move through the year <output id="yearProgress"></output></label><input type="range" id="yearScrub" min="0" max="141" step="0.1" value="0" aria-label="Time through the guided year"><div class="ends"><span id="yearStart">Jan 2027</span><span id="yearEnd">Dec 2027</span></div></div>
     <div id="yearCounter"></div>
     <aside id="yearOverview" aria-label="Earth's progress around the Sun">
       <div class="eyebrow">One trip around the Sun</div>
@@ -348,7 +360,7 @@
       </svg>
       <p>The Moon’s orbit stays tilted by about 5°. As Earth moves, the Sun lines up with its crossing points twice a year.<br><br>Bodies enlarged; distances compressed.</p>
     </aside>
-    <div class="eyebrow">13 new moons · 12 calendar months</div>
+    <div class="eyebrow" id="yearMonths">New moons · 12 calendar months</div>
     <div id="yearTimeline" role="group" aria-label="New moons in 2027"></div>
     <p style="font-size:11px;margin:10px 0 0">Eclipse types describe what happens somewhere on Earth. Totality is only visible along a narrow path. Dates are UTC.</p>
   </div>
@@ -920,7 +932,7 @@ function coverageAt(p, sunPos, sunR, occPos, occR){
 
 const state = {
   view:'system',
-  yearMode:false,
+  yearMode:false, yearSite:null,
   dist:363300, lambda:0, omega:-3.5, offset:0, playing:false, speed:5,
   shadows:true, orbit:true, labels:true, camMode:'earth', ground:false, home:false, preset:'total',
   labK:6, labKTarget:6, labKFrom:6, labKT0:0, labScale:'condensed',
@@ -1037,6 +1049,7 @@ function computeGeometry(s){
   const site = E ? s.site : HOME;
   G.home = E ? siteLab(site.lat, site.lon, G.earthSpin, G.a) : siteVector(site.lat*DEG, site.lon*DEG, G.earthSpin, G.a);
   if(s.home) G.P = G.home.clone();
+  else if(s.yearMode&&s.yearSite) G.P=siteLab(s.yearSite.lat,s.yearSite.lon,G.earthSpin,G.a);
   else if(s.path && !E && !s._anchor){   // stand where the centre line crosses at the moment of the eclipse, and ride the ground from there
     const lamC=G.solar?0:180; const A=computeGeometry({...s, lambda:lamC, _anchor:true}); const dl=((s.lambda-lamC+540)%360)-180;
     G.P=A.P.clone().applyAxisAngle(G.earthAxis, dl*DEG*SPIN_PER_LAM/k); }
