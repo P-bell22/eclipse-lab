@@ -20,7 +20,7 @@ Drag to orbit, scroll/pinch to zoom, or right-drag/two-finger drag to pan, even 
 **Inspect the shadow** magnifies the Earth and its nearby shadow; the longer eclipse stops also zoom in during playback.
 At eclipse close-ups, a marker locates the eclipse centre and an inset shows the Sun as seen from that spot, including the annular ring of fire.
 For partial eclipses and rare grazing eclipses whose shadow axis misses Earth, the marker identifies an example sunlit location, with the Sun at least 3° above the horizon; it does not claim to mark the global maximum. Hybrid eclipses have their own explanation and show the local type at the marked spot.
-The outer shadow uses muted blue and fades into space beyond Earth; the umbra still ends at its physically calculated tip.
+The outer shadow uses muted blue. Parts that meet Earth stop at its curved surface; parts that miss continue into space and fade. The umbra still ends at its physically calculated tip when it falls short of Earth.
 The small year overview shows Earth travelling around the Sun with enlarged bodies and compressed distances. The main 3D lab stays at true scale.
 Eclipse types refer to what happens somewhere on Earth, not necessarily at the saved home location. Dates are UTC.
 

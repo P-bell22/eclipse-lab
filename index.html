@@ -1262,13 +1262,26 @@ function bodyMaterial(map, opts={}){
     ambient:{value:opts.ambient!==undefined?opts.ambient:0.04}, isEarth:{value:opts.isEarth?1:0}, redTint:{value:opts.redTint?1:0}, airlight:{value:new THREE.Vector3()} },
     vertexShader:BODY_VERT, fragmentShader:BODY_FRAG });
 }
-// A transparent outer cone whose distant end fades away instead of stopping flat.
-function fadingShadowMaterial(color,opacity){
+// Share the actual globe transform so clipping follows its tilt and flattening.
+const shadowEarthUniforms={earthFromWorld:{value:new THREE.Matrix4()},sunInEarth:{value:new THREE.Vector3()}};
+// Stop each part of the Moon's shadow at Earth; unblocked parts keep fading into space.
+function moonShadowMaterial(color,opacity){
   return new THREE.ShaderMaterial({transparent:true,side:THREE.DoubleSide,depthWrite:false,
-    uniforms:{tint:{value:new THREE.Color(color)},alpha:{value:opacity},fadeStart:{value:0},fadeEnd:{value:0}},
-    vertexShader:`varying float vDistance; void main(){vDistance=position.y;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader:`uniform vec3 tint; uniform float alpha; uniform float fadeStart; uniform float fadeEnd; varying float vDistance;
-      void main(){float fade=fadeEnd>fadeStart?1.0-smoothstep(fadeStart,fadeEnd,vDistance):1.0;gl_FragColor=vec4(tint,alpha*fade);}`});
+    uniforms:{...shadowEarthUniforms,tint:{value:new THREE.Color(color)},alpha:{value:opacity},fadeStart:{value:0},fadeEnd:{value:0}},
+    vertexShader:`uniform mat4 earthFromWorld; varying vec3 vEarth; varying float vDistance;
+      void main(){vec4 world=modelMatrix*vec4(position,1.0);vEarth=(earthFromWorld*world).xyz;vDistance=position.y;gl_Position=projectionMatrix*viewMatrix*world;}`,
+    fragmentShader:`uniform vec3 tint; uniform float alpha; uniform float fadeStart; uniform float fadeEnd; uniform vec3 sunInEarth;
+      varying vec3 vEarth; varying float vDistance;
+      void main(){
+        // In globe-local coordinates Earth is a unit sphere. Reject points inside it,
+        // and points beyond it whose ray back toward the Sun crosses the globe.
+        // The cross product avoids subtracting large, nearly equal squared distances.
+        vec3 towardSun=normalize(sunInEarth-vEarth);
+        vec3 offAxis=cross(vEarth,towardSun);
+        if(dot(vEarth,vEarth)<1.0||(dot(vEarth,towardSun)<0.0&&dot(offAxis,offAxis)<1.0)) discard;
+        float fade=fadeEnd>fadeStart?1.0-smoothstep(fadeStart,fadeEnd,vDistance):1.0;
+        gl_FragColor=vec4(tint,alpha*fade);
+      }`});
 }
 // Sky dome for the ground views: drawn first with no depth, so the Sun, Moon and ground paint over it.
 const SKY_MAT = new THREE.ShaderMaterial({ uniforms:{ sunDir:{value:new THREE.Vector3(1,0,0)}, up:{value:new THREE.Vector3(0,1,0)}, day:{value:1} },
@@ -1618,7 +1631,7 @@ const labels = new LabelLayer($('#labels'));
   lab.moon=new THREE.Mesh(new THREE.SphereGeometry(RM,128,96), lab.moonMat); S.add(lab.moon);
   const coneMat=(c,o)=>new THREE.MeshBasicMaterial({color:c, transparent:true, opacity:o, side:THREE.DoubleSide, depthWrite:false});
   lab.moonShadow=new THREE.Group(); S.add(lab.moonShadow);
-  lab.umbra=new THREE.Mesh(new THREE.BufferGeometry(), coneMat(0x04050f,0.62)); lab.antumbra=new THREE.Mesh(new THREE.BufferGeometry(), fadingShadowMaterial(0x8a5218,0.28)); lab.penumbra=new THREE.Mesh(new THREE.BufferGeometry(), fadingShadowMaterial(0x232a4d,0.22));
+  lab.umbra=new THREE.Mesh(new THREE.BufferGeometry(), moonShadowMaterial(0x04050f,0.62)); lab.antumbra=new THREE.Mesh(new THREE.BufferGeometry(), moonShadowMaterial(0x8a5218,0.28)); lab.penumbra=new THREE.Mesh(new THREE.BufferGeometry(), moonShadowMaterial(0x232a4d,0.22));
   [lab.umbra,lab.antumbra,lab.penumbra].forEach(m=>{ m.renderOrder=2; lab.moonShadow.add(m); });
   lab.earthShadow=new THREE.Group(); S.add(lab.earthShadow);
   lab.eUmbra=new THREE.Mesh(new THREE.BufferGeometry(), coneMat(0x070a1f,0.42)); lab.ePenumbra=new THREE.Mesh(new THREE.BufferGeometry(), coneMat(0x1c2550,0.16));
@@ -1678,6 +1691,9 @@ function applyGeometry(){
   lab.sun.position.copy(G.sunPos); lab.glare.position.copy(G.sunPos); lab.corona.position.copy(G.sunPos); lab.orbitTilt.rotation.x=G.inc;
   lab.earth.rotation.y=G.earthSpin; lab.earthTilt.rotation.set(0, G.a, -AXIAL, 'YXZ'); lab.homeMark.position.copy(G.home); lab.homeMark.visible=!s.ground;
   lab.earth.scale.set(s.real?ELL_A:1, s.real?ELL_B:1, s.real?ELL_A:1); lab.atmo.scale.setScalar(s.real?ELL_A:1);   // the real Earth is 21 km fatter at the equator
+  lab.earth.updateWorldMatrix(true,false);
+  shadowEarthUniforms.earthFromWorld.value.copy(lab.earth.matrixWorld).invert();
+  shadowEarthUniforms.sunInEarth.value.copy(G.sunPos).applyMatrix4(shadowEarthUniforms.earthFromWorld.value);
   lab.pathGroup.visible = s.real && !s.ground && !!(s.selEclipse && s.selEclipse.bes);
   lab.moon.position.copy(G.moonPos); lab.moon.lookAt(ORIGIN); lab.moon.rotateY(-Math.PI/2);   // near side (map centre) faces Earth
   lab.earthMat.uniforms.sunPos.value.copy(G.sunPos); lab.earthMat.uniforms.occPos.value.copy(G.moonPos); lab.earthMat.uniforms.sunR.value=G.RS; lab.moonMat.uniforms.sunR.value=G.RS;
@@ -1694,7 +1710,7 @@ function applyGeometry(){
   const closeUp = s.ground || s.camMode==='shadow';
   const mo=(G.solar?1:0.45)*(closeUp?0.15:1), eo=(G.solar?0.45:1)*(s.camMode==='moon'||closeUp?0.4:1);
   lab.penumbra.material.uniforms.tint.value.setHex(s.yearMode?0x586e95:0x232a4d);
-  lab.umbra.material.opacity=(s.yearMode?0.72:0.62)*mo;
+  lab.umbra.material.uniforms.alpha.value=(s.yearMode?0.72:0.62)*mo;
   lab.penumbra.material.uniforms.alpha.value=(s.yearMode?0.36:0.22)*mo;
   lab.antumbra.material.uniforms.alpha.value=0.28*mo;
   for(const [mesh,offset] of [[lab.penumbra,0],[lab.antumbra,G.Lu]]){
