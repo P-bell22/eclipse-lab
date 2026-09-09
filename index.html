@@ -190,6 +190,7 @@
   #yearChoice{flex:1;min-width:0;margin:0;padding:7px 10px}
   #yearBlock .year-continue{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);margin:9px 0}
   #yearContinue{accent-color:var(--gold)}
+  #yearCameraControls{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:9px 0;font-size:12px;color:var(--muted)}
   #yearSunView{display:flex;align-items:center;gap:12px;margin:10px 0;padding:10px;background:rgba(255,200,87,.05);border:1px solid var(--line);border-radius:12px}
   #yearSunView svg{width:96px;height:96px;flex-shrink:0}
   #yearSunView .eyebrow{font-size:9px;margin:0 0 5px}
@@ -332,6 +333,10 @@
       <button class="chip sm" id="yearPrev" aria-label="Previous new moon">← Previous</button>
       <button class="chip sm" id="yearRestart">Restart</button>
       <button class="chip sm" id="yearNext" aria-label="Next new moon">Next →</button>
+    </div>
+    <div id="yearCameraControls">
+      <span id="yearCameraNote" role="status">Drag, pan or zoom to choose your view.</span>
+      <button class="chip sm" id="yearCameraReset" hidden>Use guided camera</button>
     </div>
     <div class="year-speed"><label for="yearSpeed">Playback speed</label><select id="yearSpeed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select><span id="yearDuration"></span></div>
     <label class="year-continue" id="yearContinueRow"><input type="checkbox" id="yearContinue"> Continue into the next year</label>
@@ -1294,7 +1299,7 @@ const ATMO_MAT = new THREE.ShaderMaterial({
 class OrbitCam{
   constructor(dom){
     this.dom=dom; this.cam=null; this.target=new THREE.Vector3(); this.radius=10; this.theta=0.6; this.phi=1.1; this.minR=0.3; this.maxR=1000; this.fov=45;
-    this.enabled=true; this.follow=null; this.tw=null; this.ptrs=new Map(); this.moved=false; this.onClick=null; this.onDblClick=null; this.pinchD=0;
+    this.enabled=true; this.follow=null; this.tw=null; this.ptrs=new Map(); this.moved=false; this.onClick=null; this.onDblClick=null; this.onNavigate=null; this.pinchD=0;
     dom.addEventListener('pointerdown',e=>this.down(e)); dom.addEventListener('pointermove',e=>this.move(e));
     dom.addEventListener('pointerup',e=>this.up(e)); dom.addEventListener('pointercancel',e=>this.up(e));
     dom.addEventListener('wheel',e=>this.wheel(e),{passive:false}); dom.addEventListener('contextmenu',e=>e.preventDefault());
@@ -1308,9 +1313,9 @@ class OrbitCam{
   }
   up(e){ this.ptrs.delete(e.pointerId); if(this.ptrs.size===0){ this.dom.classList.remove('grabbing'); if(!this.moved&&this.onClick&&e.button===0) this.onClick(e); } this.pinchD=0; }
   wheel(e){ if(!this.enabled) return; e.preventDefault(); this.zoomBy(Math.exp(e.deltaY*0.0012)); }
-  zoomBy(f){ if(this.look){ this.look.zoom(f); return; } this.tw=null; this.radius=clamp(this.radius*f,this.minR,this.maxR); }
-  rotate(dx,dy){ if(this.look){ this.look.turn(dx,dy); return; } this.tw=null; this.theta-=dx*0.006; this.phi=clamp(this.phi-dy*0.006,0.04,Math.PI-0.04); }
-  pan(dx,dy){ if(this.look){ this.look.turn(dx,dy); return; } this.tw=null; this.follow=null; const k=2*this.radius*Math.tan(this.fov*DEG/2)/this.dom.clientHeight; const right=new THREE.Vector3().setFromMatrixColumn(this.cam.matrix,0), up=new THREE.Vector3().setFromMatrixColumn(this.cam.matrix,1); this.target.addScaledVector(right,-dx*k).addScaledVector(up,dy*k); }
+  zoomBy(f){ if(f===1||!Number.isFinite(f)||f<=0) return; if(this.onNavigate) this.onNavigate(); if(this.look){ this.look.zoom(f); return; } this.tw=null; this.radius=clamp(this.radius*f,this.minR,this.maxR); }
+  rotate(dx,dy){ if(!dx&&!dy) return; if(this.onNavigate) this.onNavigate(); if(this.look){ this.look.turn(dx,dy); return; } this.tw=null; this.theta-=dx*0.006; this.phi=clamp(this.phi-dy*0.006,0.04,Math.PI-0.04); }
+  pan(dx,dy){ if(!dx&&!dy) return; if(this.onNavigate) this.onNavigate(); if(this.look){ this.look.turn(dx,dy); return; } this.tw=null; this.follow=null; const k=2*this.radius*Math.tan(this.fov*DEG/2)/this.dom.clientHeight; const right=new THREE.Vector3().setFromMatrixColumn(this.cam.matrix,0), up=new THREE.Vector3().setFromMatrixColumn(this.cam.matrix,1); this.target.addScaledVector(right,-dx*k).addScaledVector(up,dy*k); }
   flyTo(to, ms=1100){
     if(REDUCED) ms=0;
     const from={target:this.target.clone(), radius:this.radius, theta:this.theta, phi:this.phi, fov:this.fov};
@@ -1384,7 +1389,7 @@ function setCollapsed(el, collapsed){
   computeViewRect();
   if(el.id==='sky' && !collapsed && G) drawSky();
   // the free area just changed a lot, so re-fit what you were looking at
-  if(G && state.view==='lab' && !state.ground) setCamera(state.camMode);
+  if(G && state.view==='lab' && !state.ground){ if(state.yearMode) yearTour.camera(1,true); else setCamera(state.camMode); }
   else if(state.view==='system' && sys.focus) focusOn(sys.focus==='sun' ? 'Sun' : sys.focus.def.n, 700);
 }
 
@@ -2783,6 +2788,7 @@ const yearTour=(()=>{
   const availableYears=core.years(BESSEL), cache=new Map();
   let selectedYear=availableYears.includes(2027)?2027:availableYears[0];
   let tour=null, previous=null, elapsed=0, playing=false, speed=1, current=null, accumulator=0, storyKey='',detail=false, endWait=0;
+  let customCamera=false, savedCamera=null;
   const stopClocks=()=>pauseKeys.forEach(key=>state[key]=false);
   function prepareYear(year){
     if(!cache.has(year)) cache.set(year,core.build(window.Astronomy,BESSEL,Bz,year));
@@ -2853,6 +2859,7 @@ const yearTour=(()=>{
     Object.assign(state,{yearMode:true,real:true,ground:false,home:false,path:false,camMode:'whole',follow:null,
       labScale:'true',labK:1,labKTarget:1,labKFrom:1,offset:0,shadows:true,orbit:true,labels:true,selEclipse:null,local:null});
     controls.look=null; controls.follow=null; controls.tw=null; controls.enabled=true;
+    if(customCamera&&savedCamera) controls.load(savedCamera);
     lab.cam.near=0.05; lab.cam.updateProjectionMatrix();
     buildPathLines(null);
     playing=false; storyKey='';
@@ -2861,6 +2868,7 @@ const yearTour=(()=>{
   function leave(){
     pause();
     if(!previous) return;
+    if(customCamera) savedCamera=controls.save();
     Object.assign(state,previous.state); stopClocks();
     document.body.classList.remove('year-active');
     $('#yearBlock').hidden=$('#yearMarkers').hidden=true;
@@ -2887,13 +2895,23 @@ const yearTour=(()=>{
   }
   function eclipsePoint(){return current&&current.hold&&tour.events[current.eventIndex].kind!=='none'&&G&&G.sunUp&&G.cov>0?G.P:null;}
   function nextYear(){return availableYears[availableYears.indexOf(selectedYear)+1];}
-  function automaticCloseup(){return !REDUCED&&playing&&current&&current.hold&&tour.events[current.eventIndex].kind!=='none'&&current.progress>.32;}
+  function automaticCloseup(){return !customCamera&&!REDUCED&&playing&&current&&current.hold&&tour.events[current.eventIndex].kind!=='none'&&current.progress>.32;}
+  function keepCamera(){
+    if(!state.yearMode||state.view!=='lab'||(customCamera&&!detail)) return;
+    customCamera=true; detail=false;
+    controls.tw=null; controls.follow=null; controls.look=null;
+    render();
+  }
+  function useGuidedCamera(){
+    customCamera=false; savedCamera=null; detail=false; lastCameraStop=null;
+    camera(1,true); render();
+  }
   function pause(){ if(automaticCloseup()) detail=true; playing=false; controls.enabled=true; if(state.yearMode) render(); }
   function toggle(){
     if(!state.yearMode) return;
     if(playing){ pause(); return; }
     if(elapsed>=tour.duration) elapsed=0;
-    playing=true; controls.enabled=false; detail=false;
+    playing=true; controls.enabled=true; detail=false;
     stopClocks(); accumulator=0; endWait=0; applyTime();
   }
   function seek(seconds){
@@ -2922,6 +2940,9 @@ const yearTour=(()=>{
     $('#yearEarlier').disabled=selectedYear===availableYears[0];
     $('#yearLater').disabled=!nextYear();
     $('#yearContinueRow').hidden=!nextYear();
+    const cameraNote=customCamera?'Your viewpoint stays during playback.':'Drag, pan or zoom to choose your view.';
+    if($('#yearCameraNote').textContent!==cameraNote) $('#yearCameraNote').textContent=cameraNote;
+    $('#yearCameraReset').hidden=!customCamera;
     $('#yearPlay').textContent=playing?'⏸ Pause':current.complete?'↻ Replay year':elapsed===0?'▶ Play year':'▶ Resume';
     $('#yearPlay').classList.toggle('on',playing);
     $('#yearPrev').disabled=elapsed<=0; $('#yearNext').disabled=current.complete;
@@ -2933,6 +2954,9 @@ const yearTour=(()=>{
     $('#yearPhase').textContent=`${phaseName(state.eph.elong).split(' — ')[0]} · ${fmtKm(state.eph.moonKm)} away · UTC`;
     const event=current.hold?tour.events[current.eventIndex]:null;
     const close=detail||automaticCloseup();
+    // Keep the shadow and orbital guides in sync even when the camera is held still.
+    [lab.orbitGroup,lab.eclRing,lab.plane,lab.heightLine,lab.footMark,lab.moonShadow].forEach(object=>object.visible=!close);
+    [lab.lblNodeA,lab.lblNodeB,lab.lblPlane,lab.lblSun].forEach(label=>label.on=!close);
     const eclipseClose=close&&eclipsePoint();
     document.body.classList.toggle('year-eclipse-close',!!eclipseClose);
     $('#yearDetail').hidden=!event;
@@ -2997,10 +3021,11 @@ const yearTour=(()=>{
     const node=state.eph.orbit.node, nodeAngle=Math.atan2(-node[2],node[0])+state.eph.sunLon*DEG;
     $('#yearMiniOrbit').setAttribute('transform',`rotate(${-nodeAngle/DEG})`);
     $('#yearOverviewDate').textContent=new Date(current.ms).toLocaleDateString('en-GB',{month:'long',year:'numeric',timeZone:'UTC'});
-    $('#hint').textContent=playing?'The dates speed up between new moons · Space to pause':'Drag to explore · Scroll to zoom · Space to play · Outlines help locate the true-scale Earth and Moon';
+    $('#hint').textContent=`Drag to orbit · Scroll or pinch to zoom · Right-drag or two fingers to pan · Space to ${playing?'pause':'play'}`;
   }
-  function camera(dt,snap=false){
-    if(!G||!current) return;
+  function camera(dt,snap=false,explicit=false){
+    // Resuming, changing dates, resizing and eclipse stops never replace a chosen view.
+    if(!G||!current||(customCamera&&!explicit)) return;
     if(REDUCED&&!snap&&(!current.hold||lastCameraStop===current.eventIndex)) return;
     lastCameraStop=current.hold?current.eventIndex:null;
     // Ease from a full orbital-plane view into a side view of each alignment.
@@ -3014,8 +3039,6 @@ const yearTour=(()=>{
       const span=point?1.3:Math.max(1.8,G.rho*.6+1.4);
       fit=frame3(point?point.clone().normalize():V(.8,.18,-1),span,span,45);
     }
-    [lab.orbitGroup,lab.eclRing,lab.plane,lab.heightLine,lab.footMark,lab.moonShadow].forEach(object=>object.visible=!close);
-    [lab.lblNodeA,lab.lblNodeB,lab.lblPlane,lab.lblSun].forEach(label=>label.on=!close);
     target.add(fit.shift);
     const alpha=snap||REDUCED?1:1-Math.exp(-dt*4);
     controls.tw=null; controls.follow=null; controls.look=null;
@@ -3052,7 +3075,9 @@ const yearTour=(()=>{
   $('#yearLater').addEventListener('click',()=>changeYear(nextYear()));
   $('#yearContinue').addEventListener('change',()=>{if(current&&current.complete&&!$('#yearContinue').checked) pause();});
   $('#yearPlay').addEventListener('click',toggle);
-  $('#yearDetail').addEventListener('click',()=>{pause();detail=!detail;camera(1,true);render();});
+  controls.onNavigate=keepCamera;
+  $('#yearCameraReset').addEventListener('click',useGuidedCamera);
+  $('#yearDetail').addEventListener('click',()=>{pause();detail=!detail;camera(1,true,true);render();});
   $('#yearRestart').addEventListener('click',()=>seek(0));
   $('#yearPrev').addEventListener('click',()=>seek(core.step(tour,elapsed,-1)));
   $('#yearNext').addEventListener('click',()=>seek(core.step(tour,elapsed,1)));

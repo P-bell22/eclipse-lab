@@ -16,6 +16,7 @@ Other years have 12 or 13 new moons and different combinations of partial, annul
 Lunar cycles are not calendar months, so two new moons sometimes fall in the same month.
 
 Use Previous/Next, the dated new-moon buttons, or the timeline to pause at an alignment. Playback speeds are 0.5×, 1× and 2×.
+Drag to orbit, scroll/pinch to zoom, or right-drag/two-finger drag to pan, even during playback. Moving the camera keeps your chosen angle, zoom and position when you resume, change dates or years, or reach an eclipse. **Use guided camera** restores the automatic framing and eclipse close-ups. **Inspect the shadow** still offers an explicit camera move.
 **Inspect the shadow** magnifies the Earth and its nearby shadow; the longer eclipse stops also zoom in during playback.
 At eclipse close-ups, a marker locates the eclipse centre and an inset shows the Sun as seen from that spot, including the annular ring of fire.
 For partial eclipses and rare grazing eclipses whose shadow axis misses Earth, the marker identifies an example sunlit location, with the Sun at least 3° above the horizon; it does not claim to mark the global maximum. Hybrid eclipses have their own explanation and show the local type at the marked spot.
@@ -49,7 +50,7 @@ which writes a fresh `index.html`. Commit and push, and Pages redeploys on its o
 - `src/vendor/astronomy.browser.min.js` is Astronomy Engine 2.1.19 (Don Cross, MIT).
 - `src/year-tour.js` calculates the new-moon schedule, presentation timing and real orbital plane; `src/year-tour-ui.js` connects it to the lab.
 
-Run the astronomy and playback checks with `node --test tests/year-tour.test.cjs`.
+Run the astronomy, playback and camera checks with `node --test tests/*.test.cjs`.
 
 ## Credits
 
