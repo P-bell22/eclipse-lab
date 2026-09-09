@@ -5,6 +5,18 @@ Three tabs: **Solar System** (real positions, true scale), **Eclipse Lab** (sand
 
 Live site: https://p-bell22.github.io/eclipse-lab/
 
+## Sizes and the Milky Way
+
+In **Solar System → Squashed up**, choose **Proportional** to give the Sun, planets and moons correct relative sizes while keeping their orbital distances compressed. The default **Enlarged** setting magnifies each body independently for visibility. **True scale** uses one physical scale for both sizes and distances, with spherical bodies based on rounded mean radii.
+
+Choose **Line-up** for a side-by-side diameter comparison. **Planet order** follows the familiar order out from the Sun; **Smallest first** sorts the other bodies by radius, keeping the Sun first. Pluto is included as a dwarf planet. Moons are excluded from this comparison, and Saturn's rings have room of their own. The orthographic camera preserves size ratios at every zoom. Drag to pan, scroll/pinch to zoom, select a name to inspect a body, or use **Fit all**. Returning to **Orbits** restores the preceding size setting, camera and playback state; the planetary clock pauses in the line-up.
+
+Keep zooming out to leave the solar system, or use **View Milky Way**. Squashed up first transitions into True scale, then the continuous camera can travel across physical distances to frame the galaxy. **Return to solar system**, or the solar-system location marker, returns to the preceding presentation. Manual zooming inward near the Sun also restores that presentation. Scale bars show kilometres, astronomical units (AU), or light-years on the plane through the camera target. The line-up's bar represents body dimensions; no physical distance bar is shown for compressed orbits.
+
+The Milky Way is an **illustrative, static reconstruction**, approximately 100,000 light-years across, with the Sun approximately 26,000 light-years from the centre in the Orion spur. Its spiral structure and luminous clouds are not a catalogue of individual stars. A marker locates the solar system when its physical bodies are too small to resolve; that marker is not to scale. The planetary simulation's date range does not animate the galaxy. A standard J2000 galactic-coordinate rotation orients its plane relative to the solar system. Local bodies render in millions of kilometres with a floating origin; the galaxy renders in light-years using the same physical camera position.
+
+Measurements: [NASA Milky Way overview](https://imagine.gsfc.nasa.gov/science/featured_science/milkyway/), [IAU nominal solar radius](https://www.iau.org/static/resolutions/IAU2015_English.pdf), [JPL astronomical unit](https://ssd.jpl.nasa.gov/glossary/au.html), and [JPL planetary physical parameters](https://ssd.jpl.nasa.gov/planets/phys_par.html).
+
 ## Watch a year
 
 In **Eclipse Lab → Watch a year**, choose any year from **2026–2050** and press **Play year**.
@@ -49,8 +61,11 @@ which writes a fresh `index.html`. Commit and push, and Pages redeploys on its o
 - `src/bessel_data.js` holds the Besselian elements and NASA catalogue classification for every solar eclipse 2026–2050, from NASA/GSFC (Fred Espenak).
 - `src/vendor/astronomy.browser.min.js` is Astronomy Engine 2.1.19 (Don Cross, MIT).
 - `src/year-tour.js` calculates the new-moon schedule, presentation timing and real orbital plane; `src/year-tour-ui.js` connects it to the lab.
+- `src/system-scale.js` holds physical units, size comparisons and galactic coordinate conversion; `src/system-view.js` handles the comparison and travel controls; `src/galaxy-view.js` renders the illustrative galaxy without additional downloads.
 
 Run the astronomy, playback and camera checks with `node --test tests/*.test.cjs`.
+
+After rebuilding and starting a local HTTP server, run the production browser checks with `node tests/system-view.browser.cjs http://127.0.0.1:4176/eclipse-lab-site/`. They use an existing Playwright installation and Chrome; `PLAYWRIGHT_MODULE` and `CHROME_EXECUTABLE` can specify their paths. These checks cover actual mesh sizes, camera and date restoration, both zoom directions, tab switches, reduced motion and mobile framing.
 
 ## Credits
 

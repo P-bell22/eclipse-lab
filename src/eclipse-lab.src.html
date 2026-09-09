@@ -246,6 +246,23 @@
     #yearOverview{left:8px;right:auto;width:108px}
     #yearSunView{left:8px;right:auto;width:108px}
   }
+  #systemScaleHud{position:fixed;z-index:4;pointer-events:none;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(9,12,28,.85);font-size:11px;color:var(--muted);max-width:230px}
+  #systemScaleText{display:block;font-family:var(--display);color:var(--ink);margin-bottom:5px}
+  #systemScaleBar{display:inline-block;height:5px;border:1px solid var(--ink);border-top:0;vertical-align:middle;margin-right:8px}
+  #solarLocator{position:fixed;z-index:5;transform:translate(-50%,-50%);background:rgba(9,12,28,.9);text-align:center;font-size:13px}
+  #solarLocator small{display:block;font:10px var(--body);color:var(--muted)}
+  #solarLocationDot{position:fixed;z-index:4;width:5px;height:5px;border:1px solid var(--gold);background:#ffcf70;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;box-shadow:0 0 0 4px rgba(255,200,87,.12)}
+  #comparisonLabels{position:fixed;inset:0;pointer-events:none;z-index:3}
+  .comparisonLabel{position:absolute;transform:translate(-50%,0);border:0;border-radius:5px;background:rgba(9,12,28,.88);font:11px var(--display);color:var(--ink);padding:2px 4px;pointer-events:auto;cursor:pointer}
+  .comparisonLabel::before{content:'';position:absolute;bottom:100%;left:50%;height:var(--stem);border-left:1px solid rgba(180,194,230,.3);pointer-events:none}
+  .comparisonLabel.above::before{bottom:auto;top:100%}
+  #lineupList{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:10px 0}
+  .lineupEntry{display:flex;flex-direction:column;align-items:flex-start;border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:6px 9px;font:13px var(--display);color:var(--ink);cursor:pointer}
+  .lineupEntry small{font:11px var(--body);color:var(--muted)}
+  .lineupEntry:hover{border-color:var(--gold)}
+  #galaxyNote a{color:var(--sky)}
+  #systemPresentation .eyebrow{margin:9px 0 5px}
+  #systemPresentation button:disabled{opacity:.65;cursor:default}
 </style>
 
 <canvas id="gl" aria-label="3D view of the Sun, Earth and Moon"></canvas>
@@ -277,6 +294,36 @@
   </div>
   <p id="scaleNote" style="font-size:12.5px;margin-top:6px">Distances squashed and planets enlarged so everything fits on screen. Even so, the Sun is drawn 12× too small.</p>
 
+  <div id="systemPresentation">
+    <div class="eyebrow">Sizes</div>
+    <div class="seg" role="group" aria-label="Body sizes">
+      <button data-sizes="enlarged" class="on" aria-pressed="true">Enlarged</button>
+      <button data-sizes="proportional" aria-pressed="false">Proportional</button>
+    </div>
+    <div class="eyebrow">Layout</div>
+    <div class="seg" role="group" aria-label="Solar system layout">
+      <button data-layout="orbits" class="on" aria-pressed="true">Orbits</button>
+      <button data-layout="lineup" aria-pressed="false">Line-up</button>
+    </div>
+    <div id="lineupControls" hidden>
+      <div class="row" role="group" aria-label="Line-up order">
+        <button class="chip sm on" data-order="planet" aria-pressed="true">Planet order</button>
+        <button class="chip sm" data-order="size" aria-pressed="false">Smallest first</button>
+        <button class="chip sm" id="lineupFit">Fit all</button>
+      </div>
+      <p style="font-size:12px;margin-top:8px">One size scale, from the Sun to Pluto. Pan and zoom to compare; time pauses here. Click a name for a closer look.</p>
+      <div id="lineupList"></div>
+    </div>
+  </div>
+
+  <div class="row" id="galaxyTravel">
+    <button class="chip gold" id="viewGalaxy">View Milky Way ↗</button>
+    <button class="chip" id="returnSystem" hidden>Return to solar system</button>
+  </div>
+  <div id="galaxyNote" class="fact" hidden><b>Our place in the Milky Way</b><br>About 100,000 light-years across. Our Sun is about 26,000 light-years from the centre, in the Orion spur. Distances use these measured estimates; the spiral structure and star clouds are illustrative.<br><a href="https://imagine.gsfc.nasa.gov/science/featured_science/milkyway/" target="_blank" rel="noopener">NASA: our galaxy</a></div>
+
+  <div id="systemOrbitControls">
+
   <div class="slider">
     <label>How fast is time going? <output id="oSpeed"></output></label>
     <input type="range" id="sSpeed" min="0" max="1" step="0.005" value="0.52" aria-label="Simulation speed">
@@ -298,6 +345,7 @@
   <div class="eyebrow">Fly to</div>
   <div class="planetlist" id="planetButtons"></div>
   <p id="focusNote" style="font-size:12.5px;margin-top:8px;min-height:18px"></p>
+  </div>
 
   <button class="big" id="toLab">Zoom in to the Earth and Moon →</button>
 
@@ -584,6 +632,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>/*YEAR_CORE*/</script>
+<script>/*SYSTEM_CORE*/</script>
 <!--ASSETS-->
 <script>
 (function(){
@@ -815,7 +864,7 @@ class OrbitCam{
   up(e){ this.ptrs.delete(e.pointerId); if(this.ptrs.size===0){ this.dom.classList.remove('grabbing'); if(!this.moved&&this.onClick&&e.button===0) this.onClick(e); } this.pinchD=0; }
   wheel(e){ if(!this.enabled) return; e.preventDefault(); this.zoomBy(Math.exp(e.deltaY*0.0012)); }
   zoomBy(f){ if(f===1||!Number.isFinite(f)||f<=0) return; if(this.onNavigate) this.onNavigate(); if(this.look){ this.look.zoom(f); return; } this.tw=null; this.radius=clamp(this.radius*f,this.minR,this.maxR); }
-  rotate(dx,dy){ if(!dx&&!dy) return; if(this.onNavigate) this.onNavigate(); if(this.look){ this.look.turn(dx,dy); return; } this.tw=null; this.theta-=dx*0.006; this.phi=clamp(this.phi-dy*0.006,0.04,Math.PI-0.04); }
+  rotate(dx,dy){ if(this.lockOrbit){ this.pan(dx,dy); return; } if(!dx&&!dy) return; if(this.onNavigate) this.onNavigate(); if(this.look){ this.look.turn(dx,dy); return; } this.tw=null; this.theta-=dx*0.006; this.phi=clamp(this.phi-dy*0.006,0.04,Math.PI-0.04); }
   pan(dx,dy){ if(!dx&&!dy) return; if(this.onNavigate) this.onNavigate(); if(this.look){ this.look.turn(dx,dy); return; } this.tw=null; this.follow=null; const k=2*this.radius*Math.tan(this.fov*DEG/2)/this.dom.clientHeight; const right=new THREE.Vector3().setFromMatrixColumn(this.cam.matrix,0), up=new THREE.Vector3().setFromMatrixColumn(this.cam.matrix,1); this.target.addScaledVector(right,-dx*k).addScaledVector(up,dy*k); }
   flyTo(to, ms=1100){
     if(REDUCED) ms=0;
@@ -825,7 +874,7 @@ class OrbitCam{
     this.tw={from, to:{target: to.target? to.target.clone(): null, radius: to.radius!==undefined? clamp(to.radius,this.minR,this.maxR): this.radius, theta:th, phi: to.phi!==undefined? to.phi: this.phi, fov: to.fov!==undefined? to.fov: this.fov}, t0:performance.now(), ms:Math.max(1,ms)};
     if(ms===0){ this.apply(1); this.tw=null; }
   }
-  apply(k){ const {from,to}=this.tw; const e=ease(k); const tgt=this.follow? this.follow(): to.target; if(tgt) this.target.lerpVectors(from.target,tgt,e); this.radius=lerpLog(from.radius,to.radius,e); this.theta=lerp(from.theta,to.theta,e); this.phi=lerp(from.phi,to.phi,e); this.fov=lerp(from.fov,to.fov,e); }
+  apply(k){ const {from,to}=this.tw; const e=ease(k); this.radius=lerpLog(from.radius,to.radius,e); const tgt=this.tw.dynamicTarget?this.tw.dynamicTarget(this.radius,e):this.follow?this.follow():to.target; if(tgt){if(this.tw.dynamicTarget)this.target.copy(tgt);else this.target.lerpVectors(from.target,tgt,e);} this.theta=lerp(from.theta,to.theta,e); this.phi=lerp(from.phi,to.phi,e); this.fov=lerp(from.fov,to.fov,e); }
   update(){
     if(this.look) return;   // a ground view positions the camera itself
     if(this.tw){ const k=Math.min(1,(performance.now()-this.tw.t0)/this.tw.ms); this.apply(k); if(k>=1) this.tw=null; }
@@ -958,7 +1007,7 @@ const state = {
   real:false, dateMs:Date.now(), eph:null, site:{...HOME}, siteKey:'home', eclipses:null, selEclipse:null, playHours:false, playDays:false,
   tBase:Date.now(), tOff:0, tMin:-720, tMax:720, playScrub:false, scrubU:-1, follow:null, local:null,
   horizon:true,
-  sysPlaying:true, sysSpeed:0.52, sysOrbits:true, sysMoons:true, sysLabels:true, sysDays:0, scale:'condensed'
+  sysPlaying:true, sysSpeed:0.52, sysOrbits:true, sysMoons:true, sysLabels:true, sysDays:0, scale:'condensed', sysSizes:'enlarged', sysLayout:'orbits', sysOrder:'planet'
 };
 
 /* ============================================================
@@ -1671,8 +1720,9 @@ function drawSky(){
 const MOON = (n,R,a,T,texName,extra={})=>({n,R,a,T,tex:texName,...extra});   // R km, a million km, T days (negative = backwards)
 // pole = where the spin axis points (right-hand rule, J2000 RA/Dec), so Venus and Uranus point "downwards" and every
 // body spins the positive way about its own pole. rot = hours per turn. inc/tilt only matter without the ephemeris.
+// Planet radii are rounded mean radii, audited against JPL: https://ssd.jpl.nasa.gov/planets/phys_par.html
 const BODIES=[
-  {n:'Mercury', R:2440, a:57.9, T:88.0, pole:[281.01,61.41], inc:7.0, rot:1407.6, tex:'mercury', cond:{a:12,r:0.36}, moons:[]},
+  {n:'Mercury', R:2439, a:57.9, T:88.0, pole:[281.01,61.41], inc:7.0, rot:1407.6, tex:'mercury', cond:{a:12,r:0.36}, moons:[]},
   {n:'Venus', R:6052, a:108.2, T:224.7, pole:[92.76,-67.16], inc:3.4, rot:5832, tex:'venus', cond:{a:16,r:0.7}, moons:[]},
   {n:'Earth', R:6371, a:149.6, T:365.25, pole:[0,90], inc:0.0, rot:23.93, tex:'earth', cond:{a:21,r:0.74}, moons:[MOON('Moon',1737,0.3844,27.32,'moon',{ecliptic:true,eph:'moon'})]},
   {n:'Mars', R:3390, a:227.9, T:687.0, pole:[317.68,52.89], inc:1.85, rot:24.62, tex:'mars', cond:{a:27,r:0.5}, moons:[MOON('Phobos',11,0.009376,0.319,'phobos'), MOON('Deimos',6,0.02346,1.263,'deimos')]},
@@ -1682,11 +1732,11 @@ const BODIES=[
   {n:'Neptune', R:24622, a:4515, T:60190, pole:[299.36,43.46], inc:1.8, rot:16.11, tex:'neptune', cond:{a:66,r:1.1}, moons:[MOON('Triton',1353,0.3548,-5.877,'triton')]},
   {n:'Pluto', R:1188, a:5906, T:90560, pole:[132.99,-6.16], inc:17.2, rot:153.3, tex:'pluto', dwarf:true, cond:{a:73,r:0.3}, moons:[MOON('Charon',606,0.0196,6.387,'charon')]}
 ];
-const SUN_R={cond:6.5, real:0.6957};
+const SUN_R={cond:6.5, real:window.SystemScale.SUN_RADIUS_KM/1e6};
 // Real positions come from Astronomy Engine: heliocentric vectors in J2000 equatorial coordinates (AU), which we tip
 // down by the obliquity onto the ecliptic and map into the scene, where the ecliptic is the XZ plane and +Y is north.
 const A_ENG = window.Astronomy || null;
-const AU_MKM = 149.597870, EPS0 = 23.4392911*DEG;
+const AU_MKM = window.SystemScale.AU_KM/1e6, EPS0 = 23.4392911*DEG;
 function eqjToScene(x,y,z,out){ const ye=y*Math.cos(EPS0)+z*Math.sin(EPS0), ze=-y*Math.sin(EPS0)+z*Math.cos(EPS0); return (out||new THREE.Vector3()).set(x, ze, -ye); }
 function poleVec(ra,dec){ const a=ra*DEG, d=dec*DEG; return eqjToScene(Math.cos(d)*Math.cos(a), Math.cos(d)*Math.sin(a), Math.sin(d)).normalize(); }
 function sampleOrbit(name, T, N=256){   // one full orbit, centred on now, so Pluto stays inside the ephemeris tables
@@ -1701,7 +1751,7 @@ const orbitPts=[]; for(let i=0;i<=256;i++){ const a=i/256*Math.PI*2; orbitPts.pu
 const orbitGeo=new THREE.BufferGeometry().setFromPoints(orbitPts);
 {
   const S=sys.scene;
-  S.add(makeStars(2500,120000,1.6)); sys.sky=makeSkySphere(150000); S.add(sys.sky);
+  sys.stars=makeStars(2500,120000,1.6); S.add(sys.stars); sys.sky=makeSkySphere(150000); sys.sky.material.transparent=true; S.add(sys.sky);
   sys.sun=new THREE.Mesh(unitSphere, SUN_MAT()); S.add(sys.sun);
   sys.glare=new THREE.Sprite(new THREE.SpriteMaterial({map:glareTex,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,opacity:0.8})); S.add(sys.glare);
   sys.disc=new THREE.Mesh(new THREE.CircleGeometry(1,128), new THREE.MeshBasicMaterial({color:0x6cb8ff,transparent:true,opacity:0.035,side:THREE.DoubleSide,depthWrite:false})); sys.disc.rotation.x=-Math.PI/2; S.add(sys.disc);
@@ -1746,13 +1796,14 @@ const orbitGeo=new THREE.BufferGeometry().setFromPoints(orbitPts);
 }
 function sysDaysPerSec(){ return Math.pow(10, lerp(-0.7,2.4,state.sysSpeed)); }   // 0.2 days/s (an Earth turn every 5 s) up to 250 days/s
 function moonCondA(b, j){ const base=b.def.rings?2.5:1.6; return b.def.cond.r*(base+1.7*Math.log10(1+j)); }
-function moonCondR(b, md){ return b.def.cond.r*clamp(0.08+0.2*Math.pow(md.R/2634,0.7),0.07,0.3); }
+function condensedBodyRadius(radiusKm,enlargedRadius){ return window.SystemScale.bodyRadius(radiusKm,{mode:'condensed',proportional:state.sysSizes==='proportional',sunDisplayRadius:SUN_R.cond,enlargedRadius}); }
+function moonCondR(b, md){ return condensedBodyRadius(md.R,b.def.cond.r*clamp(0.08+0.2*Math.pow(md.R/2634,0.7),0.07,0.3)); }
 function layoutSystem(t){
   // t = 0 squashed, 1 true scale — interpolated in log space so the shrink reads as a smooth zoom
   sys.sunR=lerpLog(SUN_R.cond,SUN_R.real,t); sys.sun.scale.setScalar(sys.sunR); sys.glare.scale.setScalar(sys.sunR*lerpLog(4.4,5.6,t));
   sys.disc.scale.setScalar(lerpLog(78,6200,t));
   sys.bodies.forEach(b=>{
-    const d=b.def; b.a=lerpLog(d.cond.a,d.a,t); b.r=lerpLog(d.cond.r,d.R/1e6,t);
+    const d=b.def; b.a=lerpLog(d.cond.a,d.a,t); b.r=lerpLog(condensedBodyRadius(d.R,d.cond.r),d.R/1e6,t);
     b.mesh.scale.setScalar(b.r); if(b.rings) b.rings.scale.setScalar(b.r);
     if(b.orbitReal){   // every point of the real orbit pulled in to the squashed radius, so at t=0 it is a circle in the real plane
       const arr=b.orbitGeo.attributes.position.array;
@@ -1797,7 +1848,7 @@ function focusRadius(target){
 const _wo=new THREE.Vector3();
 function worldOf(obj, out){ return (out||new THREE.Vector3()).setFromMatrixPosition(obj.matrixWorld).sub(sys.scene.position); }
 function updateSystemMotion(dt){
-  if(sys.t!==sys.tTarget){ const k=REDUCED?1:Math.min(1,(performance.now()-sys.tT0)/2600); sys.t=lerp(sys.tFrom,sys.tTarget,ease(k)); if(k>=1) sys.t=sys.tTarget; layoutSystem(sys.t); if(sys.focus){ controls.radius=focusRadius(sys.focus); } }
+  if(sys.t!==sys.tTarget){ const k=REDUCED?1:Math.min(1,(performance.now()-sys.tT0)/2600); sys.t=lerp(sys.tFrom,sys.tTarget,ease(k)); if(k>=1) sys.t=sys.tTarget; layoutSystem(sys.t); if(sys.focus){ controls.radius=focusRadius(sys.focus); if(controls.tw)controls.tw.to.radius=controls.radius; } }
   if(state.sysPlaying) state.sysDays+=dt*sysDaysPerSec();
   // the ephemeris tables run out around 1800 and 2200; loop the clock back rather than let it grind on outside them
   if(A_ENG){ const y=sysDate().getUTCFullYear(); if(y>=2200) state.sysDays-=300*365.25; else if(y<1800) state.sysDays+=300*365.25; }
@@ -1817,7 +1868,7 @@ function updateSystemMotion(dt){
   sys.disc.visible=state.sysOrbits;
   sysLabels.visible=state.sysLabels;
   const near=clamp(controls.radius*0.002,2e-5,1); if(Math.abs(sys.cam.near-near)/near>0.2){ sys.cam.near=near; sys.cam.updateProjectionMatrix(); }
-  controls.minR = sys.focus&&sys.focus!=='sun' ? sys.focus.r*1.8 : sys.sunR*1.8; controls.maxR = lerpLog(400,30000,sys.t);
+  controls.minR = sys.focus&&sys.focus!=='sun' ? sys.focus.r*1.8 : sys.sunR*1.8; controls.maxR = 500000*window.SystemScale.MKM_PER_LY;
   const yr=365/dps; $('#oSpeed').innerHTML = dps<1 ? `<b>${(dps*24).toFixed(dps*24<10?1:0)} hours</b> per second · a day takes ${(1/dps).toFixed(1)} s` : `<b>${dps<10?dps.toFixed(1):Math.round(dps)} days</b> per second · a year takes ${yr>150?Math.round(yr/60)+' min':Math.round(yr)+' s'}`;
   sys.scene.updateMatrixWorld(true);
 }
@@ -1834,26 +1885,37 @@ function updateSystemUniforms(){
   });
 }
 function findBody(name){ for(const b of sys.bodies){ if(b.def.n===name) return b; for(const m of b.moons) if(m.def.n===name) return m; } return null; }
+function systemFocusOffset(){
+  const c=controls,sp=Math.sin(c.phi),dir=V(sp*Math.cos(c.theta),Math.cos(c.phi),sp*Math.sin(c.theta));
+  const right=new THREE.Vector3().crossVectors(dir.clone().negate(),Y_UP).normalize(),up=new THREE.Vector3().crossVectors(right,dir.clone().negate());
+  const k=2*c.radius*Math.tan(c.fov*DEG/2)/window.innerHeight,R=viewRect;
+  return right.multiplyScalar(-(R.x0+R.x1-window.innerWidth)/2*k).addScaledVector(up,(R.y0+R.y1-window.innerHeight)/2*k);
+}
 function focusOn(name, ms=1300){
+  if(state.sysLayout==='lineup'){ systemView.focusComparison(name); return; }
+  systemView.cancelTravel();
   const c=controls; computeViewRect(); $$('#planetButtons .chip').forEach(x=>x.classList.toggle('on',x.dataset.planet===name));
-  if(name==='Sun'){ sys.focus='sun'; c.flyTo({target:ORIGIN.clone(), radius:focusRadius('sun'), theta:c.theta, phi:1.05, fov:45}, ms); $('#focusNote').textContent= sys.t>0.5 ? 'True scale: from here even Mercury is too small to see. Its name floats where it is.' : ''; return; }
+  if(name==='Sun'){ sys.focus='sun'; c.minR=sys.sunR*1.8; c.flyTo({follow:()=>systemFocusOffset(), radius:focusRadius('sun'), theta:c.theta, phi:1.05, fov:45}, ms); $('#focusNote').textContent= sys.t>0.5 ? 'True scale: from here even Mercury is too small to see. Its name floats where it is.' : ''; return; }
   const b=findBody(name); if(!b) return; sys.focus=b;
+  c.minR=b.r*1.8;
   // arrive on the sunlit side, three-quarters on, so you never land staring at the night side
   const wp=worldOf(b.mesh); const toSun=wp.clone().negate().normalize();
   const theta=Math.atan2(toSun.z,toSun.x)+0.8;
-  c.flyTo({follow:()=>worldOf(b.mesh,_wo), radius:focusRadius(b), theta, phi:1.15, fov:45}, ms);
+  c.flyTo({follow:()=>worldOf(b.mesh).add(systemFocusOffset()), radius:focusRadius(b), theta, phi:1.15, fov:45}, ms);
   const isMoon=!!b.def.tex && !b.def.cond; const d=b.def;
   let note='';
   if(!isMoon){ const n=d.moons.length; note = n===0 ? `${d.n} has no moons.` : n===1 ? `${d.n} has one moon here: ${d.moons[0].n}.` : `${d.n}'s biggest moons: ${d.moons.map(m=>m.n).join(', ')}. Scroll out to see them go round.`; }
-  else note=`${d.n} is ${d.R.toLocaleString('en-GB')} km across and goes round its planet every ${Math.abs(d.T)<1? Math.round(Math.abs(d.T)*24)+' hours' : Math.abs(d.T).toFixed(1)+' days'}${d.T<0?' — backwards!':''}.`;
+  else note=`${d.n} is ${(2*d.R).toLocaleString('en-GB')} km across and goes round its planet every ${Math.abs(d.T)<1? Math.round(Math.abs(d.T)*24)+' hours' : Math.abs(d.T).toFixed(1)+' days'}${d.T<0?' — backwards!':''}.`;
   $('#focusNote').textContent=note;
 }
-function setScale(mode){
+function setScale(mode, opts={}){
+  if(!opts.travel){ systemView.beforeScale(mode); }
   if(state.scale===mode) return; state.scale=mode;
-  $$('.seg button').forEach(b=>b.classList.toggle('on',b.dataset.scale===mode));
+  $$('[data-scale]').forEach(b=>{ b.classList.toggle('on',b.dataset.scale===mode); b.setAttribute('aria-pressed',String(b.dataset.scale===mode)); });
   sys.tFrom=sys.t; sys.tTarget= mode==='true'?1:0; sys.tT0=performance.now();
-  if(mode==='true'){ $('#scaleNote').textContent='Everything at its real size and distance, where it really is on the date shown. The planets become specks — that is what space is really like.'; $('#scaleFact').innerHTML='<b>True scale.</b> Light from the Sun takes 8 minutes to reach the Earth, 43 minutes to reach Jupiter and over 5 hours to reach Pluto. Fly to a planet, then scroll out and watch it vanish.'; if(!sys.focus||sys.focus==='sun') focusOn('Earth',2600); }
-  else { $('#scaleNote').textContent='Distances squashed and planets enlarged so everything fits on screen. Even so, the Sun is drawn 12× too small.'; $('#scaleFact').innerHTML='<b>Squashed up!</b> If the Sun were a football, the Earth would be a peppercorn about 24 metres away — and the Moon a grain of sand 6 cm from it. Flip to <b>True scale</b> to see the real emptiness.'; if(!sys.focus||sys.focus==='sun') focusOn('Sun',2600); }
+  if(mode==='true'){ $('#scaleFact').innerHTML='<b>True scale.</b> Sizes and distances use one physical scale. Mean radii represent the spherical bodies. Names and glows help you find them; they do not represent physical size.'; if(!opts.noFocus&&(!sys.focus||sys.focus==='sun')) focusOn('Earth',2600); }
+  else { $('#scaleFact').innerHTML='<b>Squashed up.</b> Orbital distances are compressed. Choose Proportional to compare the Sun, planets and moons at one shared size scale.'; if(!opts.noFocus&&(!sys.focus||sys.focus==='sun')) focusOn('Sun',2600); }
+  systemView.refresh();
 }
 
 /*SIMPLE_JS*/
@@ -1873,6 +1935,8 @@ function switchView(v, opts={}){
   const go=()=>{
     if(state.view!=='simple') saved[state.view]=controls.save();
     state.view=v;
+    controls.lockOrbit=v==='system'&&state.sysLayout==='lineup';
+    systemView.hideOverlays();
     document.body.classList.toggle('year-active',v==='lab'&&state.yearMode);
     $('#yearMarkers').hidden=v!=='lab'||!state.yearMode;
     yearTour.layoutOverview();
@@ -1982,12 +2046,14 @@ window.addEventListener('keydown',e=>{
 });
 
 /*YEAR_UI*/
+/*SYSTEM_UI*/
 
 function onResize(){
   const w=window.innerWidth, h=window.innerHeight; renderer.setSize(w,h,false);
   [lab.cam,sys.cam].forEach(c=>{ c.aspect=w/h; c.updateProjectionMatrix(); });
   yearTour.layoutOverview();
   computeViewRect();
+  systemView.resize();
   if(state.yearMode&&state.view==='lab') yearTour.camera(1,true);
   if(state.view==='lab' && G) drawSky();
 }
@@ -2030,15 +2096,8 @@ function frame(now){
     labels.update(lab.cam,w,h);
     if(state.yearMode) yearTour.markers();
   } else {
-    updateSystemMotion(dt); controls.update();
-    // floating origin: shift the scene so the camera target is at (0,0,0), render, then put the camera back
-    const shift=controls.target.clone();
-    sys.scene.position.copy(shift).negate(); sys.scene.updateMatrixWorld(true);
-    sys.cam.position.sub(shift); sys.cam.updateMatrixWorld();
-    updateSystemUniforms();
-    renderer.render(sys.scene, sys.cam);
-    sysLabels.update(sys.cam,w,h);
-    sys.cam.position.add(shift);
+    systemView.tick(dt); updateSystemMotion(dt); systemView.cameraLimits(); controls.update();
+    systemView.render(w,h);
   }
   requestAnimationFrame(frame);
 }
@@ -2046,6 +2105,6 @@ layoutSystem(0);
 computeViewRect();
 applyGeometry();
 requestAnimationFrame(frame);
-window.__eclipseLab={ state, controls, lab, THREE, get viewRect(){return viewRect;}, get G(){ return G; }, computeGeometry, applyPreset, setCamera, setFollow, switchView, focusOn, setScale, sys, KM, Bz, BESSEL, besselLocal, edgeSitesFor, yearTour, setLabMode, computeEphemeris };
+window.__eclipseLab={ state, controls, lab, THREE, get viewRect(){return viewRect;}, get G(){ return G; }, computeGeometry, applyPreset, setCamera, setFollow, switchView, focusOn, setScale, sys, KM, Bz, BESSEL, besselLocal, edgeSitesFor, yearTour, setLabMode, computeEphemeris, systemView };
 })();
 </script>

@@ -246,6 +246,23 @@
     #yearOverview{left:8px;right:auto;width:108px}
     #yearSunView{left:8px;right:auto;width:108px}
   }
+  #systemScaleHud{position:fixed;z-index:4;pointer-events:none;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(9,12,28,.85);font-size:11px;color:var(--muted);max-width:230px}
+  #systemScaleText{display:block;font-family:var(--display);color:var(--ink);margin-bottom:5px}
+  #systemScaleBar{display:inline-block;height:5px;border:1px solid var(--ink);border-top:0;vertical-align:middle;margin-right:8px}
+  #solarLocator{position:fixed;z-index:5;transform:translate(-50%,-50%);background:rgba(9,12,28,.9);text-align:center;font-size:13px}
+  #solarLocator small{display:block;font:10px var(--body);color:var(--muted)}
+  #solarLocationDot{position:fixed;z-index:4;width:5px;height:5px;border:1px solid var(--gold);background:#ffcf70;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;box-shadow:0 0 0 4px rgba(255,200,87,.12)}
+  #comparisonLabels{position:fixed;inset:0;pointer-events:none;z-index:3}
+  .comparisonLabel{position:absolute;transform:translate(-50%,0);border:0;border-radius:5px;background:rgba(9,12,28,.88);font:11px var(--display);color:var(--ink);padding:2px 4px;pointer-events:auto;cursor:pointer}
+  .comparisonLabel::before{content:'';position:absolute;bottom:100%;left:50%;height:var(--stem);border-left:1px solid rgba(180,194,230,.3);pointer-events:none}
+  .comparisonLabel.above::before{bottom:auto;top:100%}
+  #lineupList{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:10px 0}
+  .lineupEntry{display:flex;flex-direction:column;align-items:flex-start;border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:6px 9px;font:13px var(--display);color:var(--ink);cursor:pointer}
+  .lineupEntry small{font:11px var(--body);color:var(--muted)}
+  .lineupEntry:hover{border-color:var(--gold)}
+  #galaxyNote a{color:var(--sky)}
+  #systemPresentation .eyebrow{margin:9px 0 5px}
+  #systemPresentation button:disabled{opacity:.65;cursor:default}
 </style>
 
 <canvas id="gl" aria-label="3D view of the Sun, Earth and Moon"></canvas>
@@ -277,6 +294,36 @@
   </div>
   <p id="scaleNote" style="font-size:12.5px;margin-top:6px">Distances squashed and planets enlarged so everything fits on screen. Even so, the Sun is drawn 12× too small.</p>
 
+  <div id="systemPresentation">
+    <div class="eyebrow">Sizes</div>
+    <div class="seg" role="group" aria-label="Body sizes">
+      <button data-sizes="enlarged" class="on" aria-pressed="true">Enlarged</button>
+      <button data-sizes="proportional" aria-pressed="false">Proportional</button>
+    </div>
+    <div class="eyebrow">Layout</div>
+    <div class="seg" role="group" aria-label="Solar system layout">
+      <button data-layout="orbits" class="on" aria-pressed="true">Orbits</button>
+      <button data-layout="lineup" aria-pressed="false">Line-up</button>
+    </div>
+    <div id="lineupControls" hidden>
+      <div class="row" role="group" aria-label="Line-up order">
+        <button class="chip sm on" data-order="planet" aria-pressed="true">Planet order</button>
+        <button class="chip sm" data-order="size" aria-pressed="false">Smallest first</button>
+        <button class="chip sm" id="lineupFit">Fit all</button>
+      </div>
+      <p style="font-size:12px;margin-top:8px">One size scale, from the Sun to Pluto. Pan and zoom to compare; time pauses here. Click a name for a closer look.</p>
+      <div id="lineupList"></div>
+    </div>
+  </div>
+
+  <div class="row" id="galaxyTravel">
+    <button class="chip gold" id="viewGalaxy">View Milky Way ↗</button>
+    <button class="chip" id="returnSystem" hidden>Return to solar system</button>
+  </div>
+  <div id="galaxyNote" class="fact" hidden><b>Our place in the Milky Way</b><br>About 100,000 light-years across. Our Sun is about 26,000 light-years from the centre, in the Orion spur. Distances use these measured estimates; the spiral structure and star clouds are illustrative.<br><a href="https://imagine.gsfc.nasa.gov/science/featured_science/milkyway/" target="_blank" rel="noopener">NASA: our galaxy</a></div>
+
+  <div id="systemOrbitControls">
+
   <div class="slider">
     <label>How fast is time going? <output id="oSpeed"></output></label>
     <input type="range" id="sSpeed" min="0" max="1" step="0.005" value="0.52" aria-label="Simulation speed">
@@ -298,6 +345,7 @@
   <div class="eyebrow">Fly to</div>
   <div class="planetlist" id="planetButtons"></div>
   <p id="focusNote" style="font-size:12.5px;margin-top:8px;min-height:18px"></p>
+  </div>
 
   <button class="big" id="toLab">Zoom in to the Earth and Moon →</button>
 
@@ -701,6 +749,309 @@
   }
   root.EclipseYearCore={build,sample,advance,step,counts,orbitFrame,shadowExtent,years,kinds,summary};
 })(typeof window==='undefined'?globalThis:window);
+</script>
+<script>/* Physical dimensions and presentation math shared by the solar-system views.
+ * Solar radius: IAU 2015 Resolution B3 (nominal photospheric radius).
+ * AU: IAU 2012 Resolution B2, https://ssd.jpl.nasa.gov/glossary/au.html
+ * Light-year: c × one Julian year (365.25 days).
+ * Galaxy estimates: https://imagine.gsfc.nasa.gov/science/featured_science/milkyway/
+ * Galactic rotation: conventional J2000 matrix (Liu et al. 2010, eq. 6),
+ * https://arxiv.org/html/1010.3773v1 ; equivalent to the SOFA galactic convention.
+ */
+(function(root,factory){
+  const api=factory();
+  if(typeof module==='object'&&module.exports) module.exports=api;
+  else root.SystemScale=api;
+})(typeof globalThis!=='undefined'?globalThis:this,function(){
+  'use strict';
+  const SUN_RADIUS_KM=695700, AU_KM=149597870.7, LY_KM=9460730472580.8;
+  const MKM_PER_LY=LY_KM/1e6, GALAXY_RADIUS_LY=50000, SUN_GALACTIC_DISTANCE_LY=26000;
+  const OBLIQUITY=23.4392911*Math.PI/180;
+  // Equatorial J2000 -> galactic. Its transpose gives the inverse rotation.
+  const EQJ_TO_GALACTIC=[
+    [-0.0548755604162154,-0.8734370902348850,-0.4838350155487132],
+    [ 0.4941094278755837,-0.4448296299600112, 0.7469822444972189],
+    [-0.8676661490190047,-0.1980763734312015, 0.4559837761750669]
+  ];
+
+  function positive(value,name){
+    if(!Number.isFinite(value)||value<=0) throw new RangeError(name+' must be positive and finite');
+    return value;
+  }
+
+  // True-mode radii are in million km. Condensed proportional bodies share
+  // one magnification; changing orbit spacing never changes their size ratios.
+  function bodyRadius(radiusKm,options={}){
+    positive(radiusKm,'radiusKm');
+    const {mode='true',proportional=false,sunDisplayRadius=6.5,enlargedRadius}=options;
+    if(mode==='true') return radiusKm/1e6;
+    if(mode!=='condensed') throw new RangeError('Unknown size mode');
+    if(!proportional&&enlargedRadius!==undefined) return positive(enlargedRadius,'enlargedRadius');
+    return radiusKm/SUN_RADIUS_KM*positive(sunDisplayRadius,'sunDisplayRadius');
+  }
+
+  // A centred horizontal arrangement. Extent includes rings, even when their
+  // current orientation makes them look narrower. Inputs are never reordered.
+  function lineup(bodies,order='planet',sunDisplayRadius=6.5){
+    positive(sunDisplayRadius,'sunDisplayRadius');
+    if(order!=='planet'&&order!=='size') throw new RangeError('Unknown line-up order');
+    const sorted=bodies.map((body,index)=>({...body,index}));
+    sorted.sort((a,b)=>{
+      if(a.name==='Sun') return b.name==='Sun'?a.index-b.index:-1;
+      if(b.name==='Sun') return 1;
+      return order==='size'?a.radiusKm-b.radiusKm||a.index-b.index:a.index-b.index;
+    });
+    const gap=sunDisplayRadius*.12;
+    let cursor=0;
+    const items=sorted.map(body=>{
+      const radius=bodyRadius(body.radiusKm,{mode:'condensed',proportional:true,sunDisplayRadius});
+      const extent=radius*Math.max(1,body.ringOuterRatio||1);
+      const item={name:body.name,radius,x:cursor+extent,extent};
+      cursor+=extent*2+gap;
+      return item;
+    });
+    const width=items.length?cursor-gap:0;
+    items.forEach(item=>{item.x-=width/2;});
+    return {items,width};
+  }
+
+  // Scale on the plane through the orbit-camera target, perpendicular to its
+  // view direction. Supplying physical camera distance keeps the bar truthful
+  // even when the renderer rebases or rescales its internal coordinate units.
+  function scaleBar(distanceMkm,fovRadians,viewportHeightPx,preferredPx=120){
+    positive(distanceMkm,'distanceMkm'); positive(viewportHeightPx,'viewportHeightPx'); positive(preferredPx,'preferredPx');
+    if(!(fovRadians>0&&fovRadians<Math.PI)) throw new RangeError('fovRadians must be between 0 and PI');
+    const perPixel=2*distanceMkm*Math.tan(fovRadians/2)/viewportHeightPx;
+    const target=perPixel*preferredPx;
+    const unit=target>=MKM_PER_LY?{size:MKM_PER_LY,label:'ly'}:
+      target>=AU_KM/1e6*.1?{size:AU_KM/1e6,label:'AU'}:{size:1e-6,label:'km'};
+    const targetUnits=target/unit.size;
+    const power=10**Math.floor(Math.log10(targetUnits));
+    const leading=targetUnits/power;
+    const nice=(leading>=5?5:leading>=2?2:1)*power;
+    const lengthMkm=nice*unit.size;
+    const number=Number(nice.toPrecision(12));
+    return {
+      pixels:lengthMkm/perPixel,
+      label:number.toLocaleString('en-GB',{maximumFractionDigits:12})+' '+unit.label,
+      lengthMkm
+    };
+  }
+
+  // Pure rotation: [X toward the galactic centre, Y toward l=90°, Z north]
+  // -> existing scene [ecliptic X, ecliptic north, -ecliptic Y]. Units and
+  // origin are preserved. A galaxy-centred model places the Sun at
+  // [-SUN_GALACTIC_DISTANCE_LY,0,0]; subtract that before this rotation to
+  // obtain heliocentric positions. Directions need no translation.
+  function galacticToScene(vector){
+    const [gx,gy,gz]=vector;
+    const x=EQJ_TO_GALACTIC[0][0]*gx+EQJ_TO_GALACTIC[1][0]*gy+EQJ_TO_GALACTIC[2][0]*gz;
+    const y=EQJ_TO_GALACTIC[0][1]*gx+EQJ_TO_GALACTIC[1][1]*gy+EQJ_TO_GALACTIC[2][1]*gz;
+    const z=EQJ_TO_GALACTIC[0][2]*gx+EQJ_TO_GALACTIC[1][2]*gy+EQJ_TO_GALACTIC[2][2]*gz;
+    const c=Math.cos(OBLIQUITY),s=Math.sin(OBLIQUITY);
+    return [x,-y*s+z*c,-y*c-z*s];
+  }
+
+  return Object.freeze({SUN_RADIUS_KM,AU_KM,LY_KM,MKM_PER_LY,GALAXY_RADIUS_LY,SUN_GALACTIC_DISTANCE_LY,
+    bodyRadius,lineup,scaleBar,galacticToScene});
+});
+
+/* An illustrative Milky Way, in light-years. Particles describe star clouds,
+   not a catalogue of individual stars. The local solar scene stays in million km. */
+(function (root) {
+  'use strict';
+  root.createGalaxyView = function createGalaxyView(THREE, SystemScale) {
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.001, 300000);
+    const LY = SystemScale.MKM_PER_LY;
+    const solarRadius = SystemScale.SUN_GALACTIC_DISTANCE_LY;
+    const outerRadius = SystemScale.GALAXY_RADIUS_LY;
+    const transform = xyz => new THREE.Vector3(...SystemScale.galacticToScene(xyz));
+    const centreLY = transform([solarRadius, 0, 0]);
+    const centre = centreLY.clone().multiplyScalar(LY);
+    const normal = transform([0, 0, 1]).normalize();
+    const materials = [], geometries = [], textures = [];
+    const softMaterials = [];
+    let seed = 0x4d574159;
+    function random() {
+      seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    }
+    function gaussian() { return Math.sqrt(-2 * Math.log(Math.max(1e-9, random()))) * Math.cos(2 * Math.PI * random()); }
+    const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+    const barAngle = 25 * Math.PI / 180;
+    const pitch = Math.tan(16 * Math.PI / 180);
+    function armAngle(radius, arm) {
+      const winding = Math.log(Math.max(radius, 8500) / 11000);
+      return barAngle + arm * Math.PI / 2 + winding / pitch + Math.sin(winding * 5 + arm * 1.7) * 0.115;
+    }
+    function armStrength(radius, arm) {
+      const knots = 0.72 + 0.2 * Math.sin(radius / 2800 + arm * 2.3) + 0.12 * Math.sin(radius / 1100 + arm);
+      const secondary = arm % 2 ? 0.32 * Math.exp(-Math.pow((radius - 25500) / 14500, 4)) : 1;
+      return knots * secondary;
+    }
+    // An indicative local arm segment, anchored to the Sun rather than an invented
+    // precise map: centred galactic (-26,000, 0, 0) is the solar-system location.
+    function spurAngle(radius) { return Math.PI + Math.log(Math.max(radius, 1) / solarRadius) / Math.tan(18 * Math.PI / 180); }
+    function spurStrength(radius) { return Math.exp(-Math.pow((radius - solarRadius) / 4200, 4)); }
+
+    // A faint continuous disc avoids presenting a sparse particle sample as the galaxy.
+    const canvas = document.createElement('canvas'); canvas.width = canvas.height = 768;
+    const context = canvas.getContext('2d');
+    const pixels = context.createImageData(canvas.width, canvas.height);
+    for (let y = 0; y < canvas.height; y++) {
+      for (let x = 0; x < canvas.width; x++) {
+        const gx = (x / (canvas.width - 1) * 2 - 1) * outerRadius;
+        const gy = (1 - y / (canvas.height - 1) * 2) * outerRadius;
+        const radius = Math.hypot(gx, gy), theta = Math.atan2(gy, gx);
+        const edge = 1 - Math.pow(clamp(radius / outerRadius, 0, 1), 5);
+        const radial = Math.exp(-radius / 18500) * edge;
+        let arms = 0, dust = 0;
+        for (let a = 0; a < 4; a++) {
+          const delta = Math.atan2(Math.sin(theta - armAngle(radius, a)), Math.cos(theta - armAngle(radius, a)));
+          const width = 0.1 + 950 / Math.max(radius, 4000);
+          const knots = armStrength(radius, a);
+          arms += Math.exp(-0.5 * Math.pow(delta / width, 2)) * knots;
+          dust += Math.exp(-0.5 * Math.pow((delta + 0.1) / (width * 0.3), 2)) * knots;
+        }
+        const spurDelta = Math.atan2(Math.sin(theta - spurAngle(radius)), Math.cos(theta - spurAngle(radius)));
+        arms += Math.exp(-0.5 * Math.pow(spurDelta / 0.06, 2)) * spurStrength(radius) * 0.45;
+        const bx = gx * Math.cos(barAngle) + gy * Math.sin(barAngle);
+        const by = -gx * Math.sin(barAngle) + gy * Math.cos(barAngle);
+        const bar = Math.exp(-Math.pow(bx / 11500, 4) - Math.pow(by / 2200, 2));
+        const core = Math.exp(-0.5 * Math.pow(radius / 2400, 2));
+        const armFade = clamp((radius - 7500) / 6500, 0, 1);
+        const cloudiness = 0.82 + 0.13 * Math.sin(gx * 0.0008 + gy * 0.00049) + 0.12 * Math.sin(gx * 0.0014 - gy * 0.0011);
+        const grain = (0.82 + random() * 0.36) * cloudiness;
+        const alpha = clamp((radial * (0.28 + arms * armFade * 1.55) * (1 - 0.72 * dust * armFade) + bar * 0.35 + core * 0.58) * grain, 0, 0.9);
+        const warmth = clamp(core + bar * 0.6 + Math.exp(-radius / 9000) * 0.3, 0, 1);
+        const i = (y * canvas.width + x) * 4;
+        pixels.data[i] = 180 + warmth * 73;
+        pixels.data[i + 1] = 175 + warmth * 52;
+        pixels.data[i + 2] = 181 + warmth * 19;
+        pixels.data[i + 3] = Math.round(alpha * 230);
+      }
+    }
+    context.putImageData(pixels, 0, 0);
+    const discTexture = new THREE.CanvasTexture(canvas); textures.push(discTexture);
+    const discGeometry = new THREE.PlaneGeometry(outerRadius * 2, outerRadius * 2); geometries.push(discGeometry);
+    const discMaterial = new THREE.MeshBasicMaterial({ map: discTexture, transparent: true, opacity: 1,
+      side: THREE.DoubleSide, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending });
+    materials.push(discMaterial); softMaterials.push({ material: discMaterial, opacity: 0.8 });
+    const disc = new THREE.Mesh(discGeometry, discMaterial);
+    const basis = new THREE.Matrix4().makeBasis(transform([1, 0, 0]), transform([0, 1, 0]), normal);
+    disc.quaternion.setFromRotationMatrix(basis); disc.position.copy(centreLY); disc.renderOrder = -3;
+    scene.add(disc);
+
+    // Soft cloud particles give the thin disc, central bar and bulge actual depth.
+    const positions = [], colors = [], sizes = [], strengths = [];
+    function cloud(x, y, z, size, strength, warmth) {
+      // No invented nearby star catalogue around the real solar-system position.
+      if (Math.hypot(x + solarRadius, y, z) < 150) return;
+      const p = transform([x + solarRadius, y, z]);
+      positions.push(p.x, p.y, p.z);
+      colors.push(0.69 + warmth * 0.29, 0.7 + warmth * 0.17, 0.8 - warmth * 0.12);
+      sizes.push(size); strengths.push(strength);
+    }
+    for (let i = 0; i < 23500; i++) {
+      const radius = 9000 + Math.pow(random(), 0.75) * (outerRadius - 9000);
+      const a = i % 4;
+      const angle = armAngle(radius, a) + gaussian() * (0.07 + 1200 / radius);
+      const density = Math.exp(-radius / 57000) * armStrength(radius, a);
+      const z = gaussian() * (190 + radius * 0.008);
+      cloud(Math.cos(angle) * radius, Math.sin(angle) * radius, z,
+        45 + Math.pow(random(), 3) * 260, (0.24 + random() * 0.45) * density, random() * 0.44);
+    }
+    for (let i = 0; i < 7000; i++) {
+      const radius = Math.pow(random(), 0.6) * outerRadius;
+      const angle = random() * Math.PI * 2;
+      cloud(Math.cos(angle) * radius, Math.sin(angle) * radius, gaussian() * (230 + radius * 0.012),
+        65 + random() * 170, (0.11 + random() * 0.17) * Math.exp(-radius / 55000), 0.4 + random() * 0.4);
+    }
+    for (let i = 0; i < 3000; i++) {
+      const radius = solarRadius + gaussian() * 2300;
+      const angle = spurAngle(radius) + gaussian() * 0.045;
+      cloud(Math.cos(angle) * radius, Math.sin(angle) * radius, gaussian() * 270,
+        45 + random() * 160, (0.065 + random() * 0.1) * spurStrength(radius), 0.15 + random() * 0.35);
+    }
+    for (let i = 0; i < 9000; i++) {
+      const isBar = i < 5500;
+      const bx = gaussian() * (isBar ? 5600 : 2300);
+      const by = gaussian() * (isBar ? 1100 : 2100);
+      const z = gaussian() * (isBar ? 700 : 1700);
+      cloud(bx * Math.cos(barAngle) - by * Math.sin(barAngle), bx * Math.sin(barAngle) + by * Math.cos(barAngle), z,
+        55 + random() * 140, 0.1 + random() * 0.24, 0.62 + random() * 0.38);
+    }
+    const geometry = new THREE.BufferGeometry(); geometries.push(geometry);
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setAttribute('cloudSize', new THREE.Float32BufferAttribute(sizes, 1));
+    geometry.setAttribute('strength', new THREE.Float32BufferAttribute(strengths, 1));
+    const cloudMaterial = new THREE.ShaderMaterial({
+      uniforms: { alpha: { value: 1 }, pixelScale: { value: 700 } },
+      transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+      vertexShader: `attribute vec3 color; attribute float cloudSize; attribute float strength;
+        uniform float pixelScale; varying vec3 tint; varying float amount;
+        void main(){vec4 v=modelViewMatrix*vec4(position,1.0);
+          float size=cloudSize*pixelScale/max(0.01,-v.z);
+          gl_PointSize=clamp(size,1.2,64.0); gl_Position=projectionMatrix*v;
+          tint=color; amount=strength*min(1.0,size/1.2)*min(1.0,8.0/max(8.0,size))*smoothstep(20.0,180.0,length(v.xyz));
+        }`,
+      fragmentShader: `uniform float alpha; varying vec3 tint; varying float amount;
+        void main(){vec2 p=gl_PointCoord*2.0-1.0;float r=dot(p,p);
+          if(r>1.0)discard; float haze=exp(-r*5.0)*(1.0-smoothstep(0.5,1.0,r));
+          gl_FragColor=vec4(tint,haze*amount*alpha);
+        }`
+    });
+    materials.push(cloudMaterial);
+    const points = new THREE.Points(geometry, cloudMaterial); points.frustumCulled = false; points.renderOrder = -2; scene.add(points);
+
+    const glowCanvas = document.createElement('canvas'); glowCanvas.width = glowCanvas.height = 128;
+    const glowContext = glowCanvas.getContext('2d');
+    const gradient = glowContext.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gradient.addColorStop(0, 'rgba(255,226,179,0.8)'); gradient.addColorStop(0.18, 'rgba(247,219,185,0.4)');
+    gradient.addColorStop(0.5, 'rgba(194,174,154,0.1)'); gradient.addColorStop(1, 'rgba(150,140,140,0)');
+    glowContext.fillStyle = gradient; glowContext.fillRect(0, 0, 128, 128);
+    const glowTexture = new THREE.CanvasTexture(glowCanvas); textures.push(glowTexture);
+    const glowMaterial = new THREE.SpriteMaterial({ map: glowTexture, transparent: true, depthWrite: false,
+      depthTest: false, blending: THREE.AdditiveBlending, opacity: 0.38 });
+    materials.push(glowMaterial); softMaterials.push({ material: glowMaterial, opacity: 0.38 });
+    const glow = new THREE.Sprite(glowMaterial); glow.position.copy(centreLY); glow.scale.set(14000, 14000, 1); glow.renderOrder = -1; scene.add(glow);
+
+    function configureCamera(physicalCamera, physicalTarget) {
+      camera.copy(physicalCamera, false);
+      camera.position.copy(physicalCamera.position).divideScalar(LY);
+      const radius = physicalTarget ? physicalCamera.position.distanceTo(physicalTarget) / LY : camera.position.distanceTo(centreLY);
+      camera.near = Math.max(radius * 0.00002, 1e-7);
+      camera.far = Math.max(200000, 200000 + camera.position.length());
+      camera.updateProjectionMatrix(); camera.updateMatrixWorld(true);
+    }
+    const bufferSize = new THREE.Vector2();
+    function render(renderer, physicalCamera, physicalTarget, alpha) {
+      alpha = clamp(alpha === undefined ? 1 : alpha, 0, 1);
+      if (alpha <= 0) return;
+      configureCamera(physicalCamera, physicalTarget);
+      renderer.getDrawingBufferSize(bufferSize);
+      cloudMaterial.uniforms.pixelScale.value = bufferSize.y * 0.5 / Math.tan(camera.fov * Math.PI / 360);
+      cloudMaterial.uniforms.alpha.value = alpha;
+      softMaterials.forEach(entry => { entry.material.opacity = entry.opacity * alpha; });
+      const autoClear = renderer.autoClear;
+      renderer.autoClear = false;
+      renderer.render(scene, camera);
+      renderer.autoClear = autoClear;
+    }
+    function project(pointMkm, physicalCamera, width, height) {
+      configureCamera(physicalCamera);
+      const p = pointMkm.clone().divideScalar(LY).project(camera);
+      return { x: (p.x + 1) * width / 2, y: (1 - p.y) * height / 2,
+        depth: p.z, visible: p.z >= -1 && p.z <= 1 && Math.abs(p.x) <= 1 && Math.abs(p.y) <= 1 };
+    }
+    function dispose() { geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose()); }
+    return { scene, camera, centre, normal, render, project, dispose };
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
 </script>
 <script>/*
  MIT
@@ -1327,7 +1678,7 @@ class OrbitCam{
   up(e){ this.ptrs.delete(e.pointerId); if(this.ptrs.size===0){ this.dom.classList.remove('grabbing'); if(!this.moved&&this.onClick&&e.button===0) this.onClick(e); } this.pinchD=0; }
   wheel(e){ if(!this.enabled) return; e.preventDefault(); this.zoomBy(Math.exp(e.deltaY*0.0012)); }
   zoomBy(f){ if(f===1||!Number.isFinite(f)||f<=0) return; if(this.onNavigate) this.onNavigate(); if(this.look){ this.look.zoom(f); return; } this.tw=null; this.radius=clamp(this.radius*f,this.minR,this.maxR); }
-  rotate(dx,dy){ if(!dx&&!dy) return; if(this.onNavigate) this.onNavigate(); if(this.look){ this.look.turn(dx,dy); return; } this.tw=null; this.theta-=dx*0.006; this.phi=clamp(this.phi-dy*0.006,0.04,Math.PI-0.04); }
+  rotate(dx,dy){ if(this.lockOrbit){ this.pan(dx,dy); return; } if(!dx&&!dy) return; if(this.onNavigate) this.onNavigate(); if(this.look){ this.look.turn(dx,dy); return; } this.tw=null; this.theta-=dx*0.006; this.phi=clamp(this.phi-dy*0.006,0.04,Math.PI-0.04); }
   pan(dx,dy){ if(!dx&&!dy) return; if(this.onNavigate) this.onNavigate(); if(this.look){ this.look.turn(dx,dy); return; } this.tw=null; this.follow=null; const k=2*this.radius*Math.tan(this.fov*DEG/2)/this.dom.clientHeight; const right=new THREE.Vector3().setFromMatrixColumn(this.cam.matrix,0), up=new THREE.Vector3().setFromMatrixColumn(this.cam.matrix,1); this.target.addScaledVector(right,-dx*k).addScaledVector(up,dy*k); }
   flyTo(to, ms=1100){
     if(REDUCED) ms=0;
@@ -1337,7 +1688,7 @@ class OrbitCam{
     this.tw={from, to:{target: to.target? to.target.clone(): null, radius: to.radius!==undefined? clamp(to.radius,this.minR,this.maxR): this.radius, theta:th, phi: to.phi!==undefined? to.phi: this.phi, fov: to.fov!==undefined? to.fov: this.fov}, t0:performance.now(), ms:Math.max(1,ms)};
     if(ms===0){ this.apply(1); this.tw=null; }
   }
-  apply(k){ const {from,to}=this.tw; const e=ease(k); const tgt=this.follow? this.follow(): to.target; if(tgt) this.target.lerpVectors(from.target,tgt,e); this.radius=lerpLog(from.radius,to.radius,e); this.theta=lerp(from.theta,to.theta,e); this.phi=lerp(from.phi,to.phi,e); this.fov=lerp(from.fov,to.fov,e); }
+  apply(k){ const {from,to}=this.tw; const e=ease(k); this.radius=lerpLog(from.radius,to.radius,e); const tgt=this.tw.dynamicTarget?this.tw.dynamicTarget(this.radius,e):this.follow?this.follow():to.target; if(tgt){if(this.tw.dynamicTarget)this.target.copy(tgt);else this.target.lerpVectors(from.target,tgt,e);} this.theta=lerp(from.theta,to.theta,e); this.phi=lerp(from.phi,to.phi,e); this.fov=lerp(from.fov,to.fov,e); }
   update(){
     if(this.look) return;   // a ground view positions the camera itself
     if(this.tw){ const k=Math.min(1,(performance.now()-this.tw.t0)/this.tw.ms); this.apply(k); if(k>=1) this.tw=null; }
@@ -1470,7 +1821,7 @@ const state = {
   real:false, dateMs:Date.now(), eph:null, site:{...HOME}, siteKey:'home', eclipses:null, selEclipse:null, playHours:false, playDays:false,
   tBase:Date.now(), tOff:0, tMin:-720, tMax:720, playScrub:false, scrubU:-1, follow:null, local:null,
   horizon:true,
-  sysPlaying:true, sysSpeed:0.52, sysOrbits:true, sysMoons:true, sysLabels:true, sysDays:0, scale:'condensed'
+  sysPlaying:true, sysSpeed:0.52, sysOrbits:true, sysMoons:true, sysLabels:true, sysDays:0, scale:'condensed', sysSizes:'enlarged', sysLayout:'orbits', sysOrder:'planet'
 };
 
 /* ============================================================
@@ -2183,8 +2534,9 @@ function drawSky(){
 const MOON = (n,R,a,T,texName,extra={})=>({n,R,a,T,tex:texName,...extra});   // R km, a million km, T days (negative = backwards)
 // pole = where the spin axis points (right-hand rule, J2000 RA/Dec), so Venus and Uranus point "downwards" and every
 // body spins the positive way about its own pole. rot = hours per turn. inc/tilt only matter without the ephemeris.
+// Planet radii are rounded mean radii, audited against JPL: https://ssd.jpl.nasa.gov/planets/phys_par.html
 const BODIES=[
-  {n:'Mercury', R:2440, a:57.9, T:88.0, pole:[281.01,61.41], inc:7.0, rot:1407.6, tex:'mercury', cond:{a:12,r:0.36}, moons:[]},
+  {n:'Mercury', R:2439, a:57.9, T:88.0, pole:[281.01,61.41], inc:7.0, rot:1407.6, tex:'mercury', cond:{a:12,r:0.36}, moons:[]},
   {n:'Venus', R:6052, a:108.2, T:224.7, pole:[92.76,-67.16], inc:3.4, rot:5832, tex:'venus', cond:{a:16,r:0.7}, moons:[]},
   {n:'Earth', R:6371, a:149.6, T:365.25, pole:[0,90], inc:0.0, rot:23.93, tex:'earth', cond:{a:21,r:0.74}, moons:[MOON('Moon',1737,0.3844,27.32,'moon',{ecliptic:true,eph:'moon'})]},
   {n:'Mars', R:3390, a:227.9, T:687.0, pole:[317.68,52.89], inc:1.85, rot:24.62, tex:'mars', cond:{a:27,r:0.5}, moons:[MOON('Phobos',11,0.009376,0.319,'phobos'), MOON('Deimos',6,0.02346,1.263,'deimos')]},
@@ -2194,11 +2546,11 @@ const BODIES=[
   {n:'Neptune', R:24622, a:4515, T:60190, pole:[299.36,43.46], inc:1.8, rot:16.11, tex:'neptune', cond:{a:66,r:1.1}, moons:[MOON('Triton',1353,0.3548,-5.877,'triton')]},
   {n:'Pluto', R:1188, a:5906, T:90560, pole:[132.99,-6.16], inc:17.2, rot:153.3, tex:'pluto', dwarf:true, cond:{a:73,r:0.3}, moons:[MOON('Charon',606,0.0196,6.387,'charon')]}
 ];
-const SUN_R={cond:6.5, real:0.6957};
+const SUN_R={cond:6.5, real:window.SystemScale.SUN_RADIUS_KM/1e6};
 // Real positions come from Astronomy Engine: heliocentric vectors in J2000 equatorial coordinates (AU), which we tip
 // down by the obliquity onto the ecliptic and map into the scene, where the ecliptic is the XZ plane and +Y is north.
 const A_ENG = window.Astronomy || null;
-const AU_MKM = 149.597870, EPS0 = 23.4392911*DEG;
+const AU_MKM = window.SystemScale.AU_KM/1e6, EPS0 = 23.4392911*DEG;
 function eqjToScene(x,y,z,out){ const ye=y*Math.cos(EPS0)+z*Math.sin(EPS0), ze=-y*Math.sin(EPS0)+z*Math.cos(EPS0); return (out||new THREE.Vector3()).set(x, ze, -ye); }
 function poleVec(ra,dec){ const a=ra*DEG, d=dec*DEG; return eqjToScene(Math.cos(d)*Math.cos(a), Math.cos(d)*Math.sin(a), Math.sin(d)).normalize(); }
 function sampleOrbit(name, T, N=256){   // one full orbit, centred on now, so Pluto stays inside the ephemeris tables
@@ -2213,7 +2565,7 @@ const orbitPts=[]; for(let i=0;i<=256;i++){ const a=i/256*Math.PI*2; orbitPts.pu
 const orbitGeo=new THREE.BufferGeometry().setFromPoints(orbitPts);
 {
   const S=sys.scene;
-  S.add(makeStars(2500,120000,1.6)); sys.sky=makeSkySphere(150000); S.add(sys.sky);
+  sys.stars=makeStars(2500,120000,1.6); S.add(sys.stars); sys.sky=makeSkySphere(150000); sys.sky.material.transparent=true; S.add(sys.sky);
   sys.sun=new THREE.Mesh(unitSphere, SUN_MAT()); S.add(sys.sun);
   sys.glare=new THREE.Sprite(new THREE.SpriteMaterial({map:glareTex,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,opacity:0.8})); S.add(sys.glare);
   sys.disc=new THREE.Mesh(new THREE.CircleGeometry(1,128), new THREE.MeshBasicMaterial({color:0x6cb8ff,transparent:true,opacity:0.035,side:THREE.DoubleSide,depthWrite:false})); sys.disc.rotation.x=-Math.PI/2; S.add(sys.disc);
@@ -2258,13 +2610,14 @@ const orbitGeo=new THREE.BufferGeometry().setFromPoints(orbitPts);
 }
 function sysDaysPerSec(){ return Math.pow(10, lerp(-0.7,2.4,state.sysSpeed)); }   // 0.2 days/s (an Earth turn every 5 s) up to 250 days/s
 function moonCondA(b, j){ const base=b.def.rings?2.5:1.6; return b.def.cond.r*(base+1.7*Math.log10(1+j)); }
-function moonCondR(b, md){ return b.def.cond.r*clamp(0.08+0.2*Math.pow(md.R/2634,0.7),0.07,0.3); }
+function condensedBodyRadius(radiusKm,enlargedRadius){ return window.SystemScale.bodyRadius(radiusKm,{mode:'condensed',proportional:state.sysSizes==='proportional',sunDisplayRadius:SUN_R.cond,enlargedRadius}); }
+function moonCondR(b, md){ return condensedBodyRadius(md.R,b.def.cond.r*clamp(0.08+0.2*Math.pow(md.R/2634,0.7),0.07,0.3)); }
 function layoutSystem(t){
   // t = 0 squashed, 1 true scale — interpolated in log space so the shrink reads as a smooth zoom
   sys.sunR=lerpLog(SUN_R.cond,SUN_R.real,t); sys.sun.scale.setScalar(sys.sunR); sys.glare.scale.setScalar(sys.sunR*lerpLog(4.4,5.6,t));
   sys.disc.scale.setScalar(lerpLog(78,6200,t));
   sys.bodies.forEach(b=>{
-    const d=b.def; b.a=lerpLog(d.cond.a,d.a,t); b.r=lerpLog(d.cond.r,d.R/1e6,t);
+    const d=b.def; b.a=lerpLog(d.cond.a,d.a,t); b.r=lerpLog(condensedBodyRadius(d.R,d.cond.r),d.R/1e6,t);
     b.mesh.scale.setScalar(b.r); if(b.rings) b.rings.scale.setScalar(b.r);
     if(b.orbitReal){   // every point of the real orbit pulled in to the squashed radius, so at t=0 it is a circle in the real plane
       const arr=b.orbitGeo.attributes.position.array;
@@ -2309,7 +2662,7 @@ function focusRadius(target){
 const _wo=new THREE.Vector3();
 function worldOf(obj, out){ return (out||new THREE.Vector3()).setFromMatrixPosition(obj.matrixWorld).sub(sys.scene.position); }
 function updateSystemMotion(dt){
-  if(sys.t!==sys.tTarget){ const k=REDUCED?1:Math.min(1,(performance.now()-sys.tT0)/2600); sys.t=lerp(sys.tFrom,sys.tTarget,ease(k)); if(k>=1) sys.t=sys.tTarget; layoutSystem(sys.t); if(sys.focus){ controls.radius=focusRadius(sys.focus); } }
+  if(sys.t!==sys.tTarget){ const k=REDUCED?1:Math.min(1,(performance.now()-sys.tT0)/2600); sys.t=lerp(sys.tFrom,sys.tTarget,ease(k)); if(k>=1) sys.t=sys.tTarget; layoutSystem(sys.t); if(sys.focus){ controls.radius=focusRadius(sys.focus); if(controls.tw)controls.tw.to.radius=controls.radius; } }
   if(state.sysPlaying) state.sysDays+=dt*sysDaysPerSec();
   // the ephemeris tables run out around 1800 and 2200; loop the clock back rather than let it grind on outside them
   if(A_ENG){ const y=sysDate().getUTCFullYear(); if(y>=2200) state.sysDays-=300*365.25; else if(y<1800) state.sysDays+=300*365.25; }
@@ -2329,7 +2682,7 @@ function updateSystemMotion(dt){
   sys.disc.visible=state.sysOrbits;
   sysLabels.visible=state.sysLabels;
   const near=clamp(controls.radius*0.002,2e-5,1); if(Math.abs(sys.cam.near-near)/near>0.2){ sys.cam.near=near; sys.cam.updateProjectionMatrix(); }
-  controls.minR = sys.focus&&sys.focus!=='sun' ? sys.focus.r*1.8 : sys.sunR*1.8; controls.maxR = lerpLog(400,30000,sys.t);
+  controls.minR = sys.focus&&sys.focus!=='sun' ? sys.focus.r*1.8 : sys.sunR*1.8; controls.maxR = 500000*window.SystemScale.MKM_PER_LY;
   const yr=365/dps; $('#oSpeed').innerHTML = dps<1 ? `<b>${(dps*24).toFixed(dps*24<10?1:0)} hours</b> per second · a day takes ${(1/dps).toFixed(1)} s` : `<b>${dps<10?dps.toFixed(1):Math.round(dps)} days</b> per second · a year takes ${yr>150?Math.round(yr/60)+' min':Math.round(yr)+' s'}`;
   sys.scene.updateMatrixWorld(true);
 }
@@ -2346,26 +2699,37 @@ function updateSystemUniforms(){
   });
 }
 function findBody(name){ for(const b of sys.bodies){ if(b.def.n===name) return b; for(const m of b.moons) if(m.def.n===name) return m; } return null; }
+function systemFocusOffset(){
+  const c=controls,sp=Math.sin(c.phi),dir=V(sp*Math.cos(c.theta),Math.cos(c.phi),sp*Math.sin(c.theta));
+  const right=new THREE.Vector3().crossVectors(dir.clone().negate(),Y_UP).normalize(),up=new THREE.Vector3().crossVectors(right,dir.clone().negate());
+  const k=2*c.radius*Math.tan(c.fov*DEG/2)/window.innerHeight,R=viewRect;
+  return right.multiplyScalar(-(R.x0+R.x1-window.innerWidth)/2*k).addScaledVector(up,(R.y0+R.y1-window.innerHeight)/2*k);
+}
 function focusOn(name, ms=1300){
+  if(state.sysLayout==='lineup'){ systemView.focusComparison(name); return; }
+  systemView.cancelTravel();
   const c=controls; computeViewRect(); $$('#planetButtons .chip').forEach(x=>x.classList.toggle('on',x.dataset.planet===name));
-  if(name==='Sun'){ sys.focus='sun'; c.flyTo({target:ORIGIN.clone(), radius:focusRadius('sun'), theta:c.theta, phi:1.05, fov:45}, ms); $('#focusNote').textContent= sys.t>0.5 ? 'True scale: from here even Mercury is too small to see. Its name floats where it is.' : ''; return; }
+  if(name==='Sun'){ sys.focus='sun'; c.minR=sys.sunR*1.8; c.flyTo({follow:()=>systemFocusOffset(), radius:focusRadius('sun'), theta:c.theta, phi:1.05, fov:45}, ms); $('#focusNote').textContent= sys.t>0.5 ? 'True scale: from here even Mercury is too small to see. Its name floats where it is.' : ''; return; }
   const b=findBody(name); if(!b) return; sys.focus=b;
+  c.minR=b.r*1.8;
   // arrive on the sunlit side, three-quarters on, so you never land staring at the night side
   const wp=worldOf(b.mesh); const toSun=wp.clone().negate().normalize();
   const theta=Math.atan2(toSun.z,toSun.x)+0.8;
-  c.flyTo({follow:()=>worldOf(b.mesh,_wo), radius:focusRadius(b), theta, phi:1.15, fov:45}, ms);
+  c.flyTo({follow:()=>worldOf(b.mesh).add(systemFocusOffset()), radius:focusRadius(b), theta, phi:1.15, fov:45}, ms);
   const isMoon=!!b.def.tex && !b.def.cond; const d=b.def;
   let note='';
   if(!isMoon){ const n=d.moons.length; note = n===0 ? `${d.n} has no moons.` : n===1 ? `${d.n} has one moon here: ${d.moons[0].n}.` : `${d.n}'s biggest moons: ${d.moons.map(m=>m.n).join(', ')}. Scroll out to see them go round.`; }
-  else note=`${d.n} is ${d.R.toLocaleString('en-GB')} km across and goes round its planet every ${Math.abs(d.T)<1? Math.round(Math.abs(d.T)*24)+' hours' : Math.abs(d.T).toFixed(1)+' days'}${d.T<0?' — backwards!':''}.`;
+  else note=`${d.n} is ${(2*d.R).toLocaleString('en-GB')} km across and goes round its planet every ${Math.abs(d.T)<1? Math.round(Math.abs(d.T)*24)+' hours' : Math.abs(d.T).toFixed(1)+' days'}${d.T<0?' — backwards!':''}.`;
   $('#focusNote').textContent=note;
 }
-function setScale(mode){
+function setScale(mode, opts={}){
+  if(!opts.travel){ systemView.beforeScale(mode); }
   if(state.scale===mode) return; state.scale=mode;
-  $$('.seg button').forEach(b=>b.classList.toggle('on',b.dataset.scale===mode));
+  $$('[data-scale]').forEach(b=>{ b.classList.toggle('on',b.dataset.scale===mode); b.setAttribute('aria-pressed',String(b.dataset.scale===mode)); });
   sys.tFrom=sys.t; sys.tTarget= mode==='true'?1:0; sys.tT0=performance.now();
-  if(mode==='true'){ $('#scaleNote').textContent='Everything at its real size and distance, where it really is on the date shown. The planets become specks — that is what space is really like.'; $('#scaleFact').innerHTML='<b>True scale.</b> Light from the Sun takes 8 minutes to reach the Earth, 43 minutes to reach Jupiter and over 5 hours to reach Pluto. Fly to a planet, then scroll out and watch it vanish.'; if(!sys.focus||sys.focus==='sun') focusOn('Earth',2600); }
-  else { $('#scaleNote').textContent='Distances squashed and planets enlarged so everything fits on screen. Even so, the Sun is drawn 12× too small.'; $('#scaleFact').innerHTML='<b>Squashed up!</b> If the Sun were a football, the Earth would be a peppercorn about 24 metres away — and the Moon a grain of sand 6 cm from it. Flip to <b>True scale</b> to see the real emptiness.'; if(!sys.focus||sys.focus==='sun') focusOn('Sun',2600); }
+  if(mode==='true'){ $('#scaleFact').innerHTML='<b>True scale.</b> Sizes and distances use one physical scale. Mean radii represent the spherical bodies. Names and glows help you find them; they do not represent physical size.'; if(!opts.noFocus&&(!sys.focus||sys.focus==='sun')) focusOn('Earth',2600); }
+  else { $('#scaleFact').innerHTML='<b>Squashed up.</b> Orbital distances are compressed. Choose Proportional to compare the Sun, planets and moons at one shared size scale.'; if(!opts.noFocus&&(!sys.focus||sys.focus==='sun')) focusOn('Sun',2600); }
+  systemView.refresh();
 }
 
 /* ============================================================
@@ -2688,6 +3052,8 @@ function switchView(v, opts={}){
   const go=()=>{
     if(state.view!=='simple') saved[state.view]=controls.save();
     state.view=v;
+    controls.lockOrbit=v==='system'&&state.sysLayout==='lineup';
+    systemView.hideOverlays();
     document.body.classList.toggle('year-active',v==='lab'&&state.yearMode);
     $('#yearMarkers').hidden=v!=='lab'||!state.yearMode;
     yearTour.layoutOverview();
@@ -3104,12 +3470,243 @@ const yearTour=(()=>{
   return {enter,leave,show,pause,toggle,tick,render,camera,markers,seek,layoutOverview,get playing(){return playing;},get tour(){return tour;},get current(){return current;}};
 })();
 
+// Solar-system presentation, comparison camera, and travel between physical scales.
+const systemView=(()=>{
+  const S=window.SystemScale, LY=S.MKM_PER_LY, MAX=500000*LY;
+  const galaxy=window.createGalaxyView(THREE,S);
+  const comparison={scene:new THREE.Scene(),cam:new THREE.OrthographicCamera(),items:[],layout:null,saved:null};
+  let journey=null, phase=null, wasFar=false;
+  const hud=document.createElement('div'); hud.id='systemScaleHud';
+  hud.title='Scale on the plane through the camera target. Objects at other depths can appear larger or smaller.';
+  hud.innerHTML='<span id="systemScaleText"></span><i id="systemScaleBar"></i><small id="systemScaleUnits"></small>';
+  document.body.appendChild(hud);
+  const locator=document.createElement('button'); locator.id='solarLocator'; locator.className='chip gold';
+  locator.innerHTML='<span>⊙ Solar system</span><small>Location marker · not to scale</small>'; locator.hidden=true;
+  locator.addEventListener('click',returnHome); document.body.appendChild(locator);
+  const locationDot=document.createElement('i');locationDot.id='solarLocationDot';locationDot.hidden=true;document.body.appendChild(locationDot);
+  const lineLabels=document.createElement('div'); lineLabels.id='comparisonLabels'; lineLabels.hidden=true; document.body.appendChild(lineLabels);
+  const bodies=[{name:'Sun',radiusKm:S.SUN_RADIUS_KM},...BODIES.map(d=>({name:d.n,radiusKm:d.R,ringOuterRatio:d.rings?2.27:1}))];
+  function snapshot(){return {camera:controls.save(),scale:state.scale,sizes:state.sysSizes,focus:sys.focus,layout:state.sysLayout};}
+  function farFromSystem(){return state.scale==='true'&&Math.max(controls.radius,controls.target.length())>30000;}
+  function buttons(key,value){ $$('[data-'+key+']').forEach(b=>{const on=b.dataset[key]===value;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));}); }
+  function refresh(){
+    const line=state.sysLayout==='lineup', far=farFromSystem();
+    $('#systemPresentation').hidden=state.scale!=='condensed'; $('#lineupControls').hidden=!line; $('#systemOrbitControls').hidden=line;
+    $$('[data-sizes]').forEach(b=>b.disabled=line);
+    buttons('sizes',line?'proportional':state.sysSizes);buttons('layout',state.sysLayout);buttons('order',state.sysOrder);buttons('scale',state.scale);
+    $('#returnSystem').hidden=!journey&&!far; $('#galaxyNote').hidden=!far;
+    $('#sysPlay').textContent=state.sysPlaying?'⏸ Pause':'▶ Play';
+    $('#scaleNote').textContent=line?'Correct relative diameters, side by side. Gaps are for comparison, not orbital distances.':state.scale==='true'?'One physical scale for sizes and distances. Scroll out beyond the planets to find our place in the Milky Way.':state.sysSizes==='proportional'?'Correct size ratios, including the Sun and moons. Orbital distances stay squashed; small planets really are this small.':'Distances squashed and body sizes enlarged individually so everything is easy to see. Choose Proportional for correct size ratios.';
+    $('#scaleFact').innerHTML=line?'<b>Our Sun is enormous.</b> Its diameter is about 109 Earths, or nearly 10 Jupiters. Every body here uses the same magnification; the gaps are just for readability.':state.scale==='true'?'<b>True scale.</b> Sizes and distances use one physical scale. Mean radii represent the spherical bodies. Names and glows help you find them; they do not represent physical size.':'<b>Squashed up.</b> Orbital distances are compressed. Choose Proportional to compare the Sun, planets and moons at one shared size scale.';
+    $('#hint').textContent=line?'Drag to pan · Scroll or pinch to zoom · Fit all to see the whole line-up':'Drag to orbit · Scroll or pinch to zoom · Right-drag or two fingers to pan · Scroll out to the Milky Way';
+  }
+  function setSizes(sizes){
+    if(state.sysLayout==='lineup')return;
+    const old=sys.focus&&sys.focus!=='sun'?sys.focus.r:sys.sunR;
+    state.sysSizes=sizes; layoutSystem(sys.t);
+    if(sys.focus){const next=sys.focus==='sun'?sys.sunR:sys.focus.r;controls.radius*=next/old;controls.tw=null;}
+    refresh();
+  }
+  function makeComparison(){
+    if(comparison.items.length)return;
+    for(const d of bodies){
+      const b=sys.bodies.find(b=>b.def.n===d.name), group=new THREE.Group();
+      const mat=d.name==='Sun'?SUN_MAT():new THREE.MeshBasicMaterial({map:b.mat.uniforms.map.value});
+      const mesh=new THREE.Mesh(unitSphere,mat); group.add(mesh);
+      // Lighting is uniform here: this is a diameter comparison, not an eclipse scene.
+      if(b){mesh.quaternion.copy(b.poleQ);mesh.rotation.y+=.5;}
+      if(b&&b.rings){const ring=b.rings.clone();ring.material=b.rings.material.clone();ring.quaternion.copy(b.poleQ).multiply(b.rings.quaternion);group.add(ring);group.userData.ring=ring;}
+      comparison.scene.add(group);
+      const label=document.createElement('button');label.className='comparisonLabel';label.textContent=d.name;label.addEventListener('click',()=>focusComparison(d.name));lineLabels.appendChild(label);
+      comparison.items.push({def:d,group,mesh,label});
+    }
+  }
+  function arrange(){
+    makeComparison(); comparison.layout=S.lineup(bodies,state.sysOrder,SUN_R.cond);
+    for(const p of comparison.layout.items){ const it=comparison.items.find(it=>it.def.name===p.name);it.x=p.x;it.radius=p.radius;it.extent=p.extent;it.group.position.set(p.x,0,0);it.mesh.scale.setScalar(p.radius);if(it.group.userData.ring)it.group.userData.ring.scale.setScalar(p.radius); }
+    $('#lineupList').replaceChildren();
+    for(const p of comparison.layout.items){ const d=bodies.find(d=>d.name===p.name),b=document.createElement('button');b.className='lineupEntry';b.innerHTML=`<span>${d.name}${d.name==='Pluto'?' <small>(dwarf)</small>':''}</span><small>${(d.radiusKm*2).toLocaleString('en-GB')} km</small>`;b.addEventListener('click',()=>focusComparison(d.name));$('#lineupList').appendChild(b); }
+    fitComparison();
+  }
+  function fitComparison(){
+    if(!comparison.layout)return;computeViewRect();
+    const f=frame3(V(0,0,1),comparison.layout.width/2+1,SUN_R.cond+2,45);
+    controls.minR=.06;controls.maxR=300;controls.follow=null;
+    controls.flyTo({target:f.shift,radius:f.r,theta:Math.PI/2,phi:Math.PI/2,fov:45},0);
+  }
+  function setLayout(layout){
+    if(layout===state.sysLayout)return;
+    cancelTravel();
+    if(layout==='lineup'){
+      comparison.saved={...snapshot(),playing:state.sysPlaying}; state.sysLayout='lineup';state.sysPlaying=false;sys.focus=null;controls.lockOrbit=true;controls.tw=null;
+      sys.t=sys.tTarget=0;layoutSystem(0);arrange();
+    }else{
+      state.sysLayout='orbits';controls.lockOrbit=false;lineLabels.hidden=true;
+      if(comparison.saved){ const old=comparison.saved;state.sysSizes=old.sizes;state.sysPlaying=old.playing;sys.focus=old.focus;controls.load(old.camera);comparison.saved=null;layoutSystem(sys.t); }
+    }
+    refresh();
+  }
+  function focusComparison(name){
+    const it=comparison.items.find(it=>it.def.name===name);if(!it)return;
+    computeViewRect();const f=frame3(V(0,0,1),it.extent*1.35,it.radius*1.5,45);
+    controls.flyTo({target:V(it.x,0,0).add(f.shift),radius:f.r,theta:Math.PI/2,phi:Math.PI/2},700);
+  }
+  function cancelTravel(){phase=null;journey=null;pendingRestore=null;controls.tw=null;controls.follow=null;}
+  function beforeScale(mode){
+    cancelTravel();
+    if(state.sysLayout==='lineup')setLayout('orbits');
+    if(mode==='condensed'&&controls.radius>30000){journey=null;sys.focus='sun';controls.target.set(0,0,0);controls.radius=30000;}
+  }
+  function startOut(shortcut){
+    const oldLine=state.sysLayout==='lineup';if(oldLine)setLayout('orbits');
+    if(!journey){journey=snapshot();journey.layout=oldLine?'lineup':journey.layout;}
+    sys.focus=null;controls.follow=null;controls.maxR=MAX;
+    if(state.scale==='condensed'){
+      setScale('true',{travel:true,noFocus:true});
+      controls.flyTo({target:ORIGIN,radius:Math.max(30000,controls.radius*100),fov:45},2600);
+      phase=shortcut?'prepare-galaxy':'expand';
+    }else if(shortcut)flyGalaxy();
+    refresh();
+  }
+  function flyGalaxy(completion='galaxy'){
+    computeViewRect();const direction=galaxy.normal.clone().addScaledVector(V(1,0,0),.22).normalize();
+    const f=frame3(direction,55000*LY,55000*LY,45), to=galaxy.centre.clone().add(f.shift);
+    const from=controls.target.clone(), fromR=controls.radius;
+    const startDirection=V(Math.sin(controls.phi)*Math.cos(controls.theta),Math.cos(controls.phi),Math.sin(controls.phi)*Math.sin(controls.theta));
+    const startPosition=from.clone().addScaledVector(startDirection,fromR);
+    const nearHome=startPosition.length()<1000*LY;
+    sys.focus=null;controls.maxR=MAX;
+    controls.flyTo({radius:f.r,theta:f.a.theta,phi:f.a.phi,fov:45},6000);
+    // Target travel follows logarithmic zoom too, so the camera never races away while still close to the Sun.
+    if(controls.tw)controls.tw.dynamicTarget=(r,e)=>nearHome?from.clone().multiplyScalar(1-e).addScaledVector(to,clamp((r-fromR)/Math.max(f.r-fromR,1),0,1)):from.clone().lerp(to,e);
+    else controls.target.copy(to);
+    phase=completion;refresh();
+  }
+  function returnHome(){
+    if(!journey)journey={camera:{target:V(0,0,0),radius:140,theta:.9,phi:1.05,fov:45,follow:null,minR:2,maxR:MAX},scale:'condensed',sizes:state.sysSizes,focus:'sun',layout:'orbits'};
+    if(controls.target.length()>1000*LY&&controls.radius<1000*LY){flyGalaxy('home-overview');return;}
+    const from=controls.target.clone(),fromR=controls.radius;
+    const target=journey.scale==='true'?journey.camera.target.clone():V(0,0,0);
+    const radius=journey.scale==='true'?journey.camera.radius:30000;
+    sys.focus=null;controls.follow=null;controls.maxR=MAX;
+    controls.flyTo({radius,theta:journey.camera.theta,phi:journey.camera.phi,fov:journey.camera.fov},4800);
+    if(controls.tw)controls.tw.dynamicTarget=r=>target.clone().addScaledVector(from.clone().sub(target),clamp((r-radius)/Math.max(fromR-radius,1),0,1));
+    else controls.target.copy(target);
+    phase='home';refresh();
+  }
+  function restoreHome(){
+    const old=journey;if(!old)return;
+    journey=null;phase=null;state.sysSizes=old.sizes;sys.focus=null;
+    setScale(old.scale,{travel:true,noFocus:true});
+    controls.maxR=MAX;controls.flyTo({...old.camera,target:old.camera.target},old.scale==='condensed'?2600:0);
+    phase='restore';pendingRestore=old;refresh();
+  }
+  let pendingRestore=null;
+  function tick(){
+    controls.lockOrbit=state.sysLayout==='lineup';
+    if(state.sysLayout==='lineup')return;
+    if(state.scale==='condensed'&&controls.radius>400&&sys.t===sys.tTarget&&!phase){startOut(false);return;}
+    if(phase&&(REDUCED||!controls.tw)&&sys.t===sys.tTarget){
+      const done=phase;phase=null;
+      if(done==='prepare-galaxy')flyGalaxy();
+      else if(done==='home-overview')returnHome();
+      else if(done==='home')restoreHome();
+      else if(done==='restore'&&pendingRestore){const old=pendingRestore;pendingRestore=null;sys.focus=old.focus;controls.load(old.camera);if(old.layout==='lineup')setLayout('lineup');refresh();}
+      else if(done==='galaxy')refresh();
+    }
+    const far=farFromSystem();
+    if(far!==wasFar){wasFar=far;refresh();}
+    if(journey&&far)journey.leftLocal=true;
+    if(journey&&journey.leftLocal&&!phase&&!controls.tw&&controls.radius<15000&&controls.target.length()<15000)restoreHome();
+  }
+  function cameraLimits(){
+    if(state.sysLayout==='lineup'){controls.minR=.06;controls.maxR=300;}
+    else controls.maxR=MAX;
+  }
+  function hideOverlays(){hud.hidden=true;locator.hidden=true;locationDot.hidden=true;lineLabels.hidden=true;}
+  function resize(){ if(state.view==='system'&&state.sysLayout==='lineup')fitComparison(); }
+  function scaleHud(){
+    hud.hidden=false;const R=viewRect;
+    hud.style.left=(R.x0+16)+'px';hud.style.top=Math.max(R.y0+8,R.y1-68)+'px';
+    const line=state.sysLayout==='lineup';
+    let info=null;
+    if(line)info=S.scaleBar(controls.radius*(SUN_R.real/SUN_R.cond),controls.fov*DEG,window.innerHeight,100);
+    else if(state.scale==='true'&&sys.t===1)info=S.scaleBar(controls.radius,controls.fov*DEG,window.innerHeight,100);
+    $('#systemScaleText').textContent=line?'Relative diameters':state.scale==='condensed'?'Compressed distances':sys.t!==1?'Moving into true scale…':controls.radius>LY?'Milky Way · true distances':'True sizes & distances';
+    $('#systemScaleBar').hidden=!info;$('#systemScaleUnits').textContent=info?info.label:state.sysSizes==='proportional'?'One shared size scale':'Bodies enlarged individually';
+    if(info)$('#systemScaleBar').style.width=info.pixels+'px';
+  }
+  function renderComparison(w,h){
+    sysLabels.hideAll();locator.hidden=true;locationDot.hidden=true;lineLabels.hidden=false;
+    const c=comparison.cam,hh=controls.radius*Math.tan(controls.fov*DEG/2);
+    c.left=-hh*w/h;c.right=hh*w/h;c.top=hh;c.bottom=-hh;c.near=.001;c.far=1000;
+    // Orthographic projection preserves diameter ratios at every zoom level.
+    c.position.set(controls.target.x,controls.target.y,100);c.lookAt(controls.target.x,controls.target.y,0);c.updateProjectionMatrix();c.updateMatrixWorld();
+    renderer.render(comparison.scene,c);comparison.scene.updateMatrixWorld(true);
+    const order=comparison.layout.items, ends=[];
+    const planetPx=Math.max(...comparison.items.filter(it=>it.def.name!=='Sun').map(it=>it.radius))/hh*h/2;
+    for(const item of order){
+      const it=comparison.items.find(it=>it.def.name===item.name);
+      const p=it.group.position.clone().project(c),x=(p.x*.5+.5)*w,bodyY=(-p.y*.5+.5)*h,px=it.radius/hh*h/2;
+      const labelWidth=it.label.offsetWidth||it.def.name.length*6+8;
+      let row=0;while(ends[row]!==undefined&&x-labelWidth/2<ends[row]+5)row++;
+      ends[row]=x+labelWidth/2;
+      const above=it.def.name==='Sun'||row>=3;
+      const offset=it.def.name==='Sun'?-px-30:above?-planetPx-32-(row-3)*19:planetPx+20+row*19;
+      const y=bodyY+offset,R=viewRect;
+      it.label.hidden=x<R.x0+12||x>R.x1-20||bodyY+px<R.y0||y<R.y0+5||y>R.y1-75;
+      it.label.classList.toggle('above',above);
+      it.label.style.left=x+'px';it.label.style.top=y+'px';it.label.style.setProperty('--stem',Math.max(0,Math.abs(offset)-px-(above?18:7))+'px');
+    }
+  }
+  function render(w,h){
+    scaleHud();
+    if(state.sysLayout==='lineup'){renderComparison(w,h);return;}
+    lineLabels.hidden=true;
+    const distance=Math.max(controls.radius,sys.cam.position.length()), blend=smooth(Math.log(.01*LY),Math.log(3*LY),Math.log(Math.max(distance,1)));
+    renderer.clear();galaxy.render(renderer,sys.cam,controls.target,blend);
+    if(distance<4*LY){
+      // Floating origin for detailed bodies. Sky spheres follow the physical camera, so scrolling cannot leave them behind.
+      sys.sky.position.copy(sys.cam.position);sys.stars.position.copy(sys.cam.position);
+      sys.sky.material.opacity=1-blend;sys.stars.material.opacity=1-blend;
+      const near=clamp(controls.radius*.002,2e-5,Math.max(1,controls.radius*.01));
+      sys.cam.near=near;sys.cam.far=Math.max(220000,controls.radius*4+controls.target.length());sys.cam.updateProjectionMatrix();
+      const fade=1-smooth(30000,300000,distance);sys.disc.material.opacity=.035*fade;
+      sys.bodies.forEach(b=>{b.orbit.material.opacity=.32*fade;});
+      const shift=controls.target.clone();sys.scene.position.copy(shift).negate();sys.scene.updateMatrixWorld(true);
+      sys.cam.position.sub(shift);sys.cam.updateMatrixWorld();updateSystemUniforms();
+      renderer.clearDepth();const auto=renderer.autoClear;renderer.autoClear=false;renderer.render(sys.scene,sys.cam);renderer.autoClear=auto;
+      sysLabels.visible=state.sysLabels&&distance<30000;sysLabels.update(sys.cam,w,h);
+      sys.cam.position.add(shift);sys.cam.updateMatrixWorld();
+    }else sysLabels.hideAll();
+    locator.hidden=state.scale!=='true'||distance<30000;
+    locationDot.hidden=true;
+    if(!locator.hidden){
+      const p=galaxy.project(ORIGIN,sys.cam,w,h),R=viewRect;
+      locator.style.left=clamp(p.x,R.x0+90,R.x1-95)+'px';locator.style.top=clamp(p.y+24,R.y0+110,R.y1-100)+'px';
+      const offscreen=!p.visible||p.x<R.x0||p.x>R.x1||p.y<R.y0||p.y>R.y1;
+      const angle=Math.atan2(p.y-h/2,p.x-w/2)+(p.depth>1?Math.PI:0),arrows=['→','↘','↓','↙','←','↖','↑','↗'];
+      locator.querySelector('span').textContent=(offscreen?arrows[(Math.round(angle/(Math.PI/4))+8)%8]:'⊙')+' Solar system';
+      if(!offscreen){locationDot.hidden=false;locationDot.style.left=p.x+'px';locationDot.style.top=p.y+'px';}
+    }
+  }
+  $$('[data-sizes]').forEach(b=>b.addEventListener('click',()=>setSizes(b.dataset.sizes)));
+  $$('[data-layout]').forEach(b=>b.addEventListener('click',()=>setLayout(b.dataset.layout)));
+  $$('[data-order]').forEach(b=>b.addEventListener('click',()=>{state.sysOrder=b.dataset.order;arrange();refresh();}));
+  $('#lineupFit').addEventListener('click',fitComparison);$('#viewGalaxy').addEventListener('click',()=>startOut(true));$('#returnSystem').addEventListener('click',returnHome);
+  const previousNavigate=controls.onNavigate;
+  controls.onNavigate=()=>{if(previousNavigate)previousNavigate();if(state.view==='system'){phase=null;pendingRestore=null;}};
+  refresh();
+  return {tick,render,refresh,resize,cameraLimits,hideOverlays,setSizes,setLayout,focusComparison,fitComparison,beforeScale,cancelTravel,startOut,returnHome,galaxy,comparison,get journey(){return journey;},get phase(){return phase;}};
+})();
+
 
 function onResize(){
   const w=window.innerWidth, h=window.innerHeight; renderer.setSize(w,h,false);
   [lab.cam,sys.cam].forEach(c=>{ c.aspect=w/h; c.updateProjectionMatrix(); });
   yearTour.layoutOverview();
   computeViewRect();
+  systemView.resize();
   if(state.yearMode&&state.view==='lab') yearTour.camera(1,true);
   if(state.view==='lab' && G) drawSky();
 }
@@ -3152,15 +3749,8 @@ function frame(now){
     labels.update(lab.cam,w,h);
     if(state.yearMode) yearTour.markers();
   } else {
-    updateSystemMotion(dt); controls.update();
-    // floating origin: shift the scene so the camera target is at (0,0,0), render, then put the camera back
-    const shift=controls.target.clone();
-    sys.scene.position.copy(shift).negate(); sys.scene.updateMatrixWorld(true);
-    sys.cam.position.sub(shift); sys.cam.updateMatrixWorld();
-    updateSystemUniforms();
-    renderer.render(sys.scene, sys.cam);
-    sysLabels.update(sys.cam,w,h);
-    sys.cam.position.add(shift);
+    systemView.tick(dt); updateSystemMotion(dt); systemView.cameraLimits(); controls.update();
+    systemView.render(w,h);
   }
   requestAnimationFrame(frame);
 }
@@ -3168,7 +3758,7 @@ layoutSystem(0);
 computeViewRect();
 applyGeometry();
 requestAnimationFrame(frame);
-window.__eclipseLab={ state, controls, lab, THREE, get viewRect(){return viewRect;}, get G(){ return G; }, computeGeometry, applyPreset, setCamera, setFollow, switchView, focusOn, setScale, sys, KM, Bz, BESSEL, besselLocal, edgeSitesFor, yearTour, setLabMode, computeEphemeris };
+window.__eclipseLab={ state, controls, lab, THREE, get viewRect(){return viewRect;}, get G(){ return G; }, computeGeometry, applyPreset, setCamera, setFollow, switchView, focusOn, setScale, sys, KM, Bz, BESSEL, besselLocal, edgeSitesFor, yearTour, setLabMode, computeEphemeris, systemView };
 })();
 </script>
 </body></html>
