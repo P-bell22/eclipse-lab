@@ -1451,6 +1451,7 @@ window.BESSEL={"2026-02-17":{"t0":1771329600000,"dT":71.2,"x":[0.322033,0.482711
 <script>
 (function(){
 'use strict';
+if(window.__eclipseSourcePreview)return;
 if(!window.THREE){ document.getElementById('err').style.display='block'; document.getElementById('errMsg').textContent='The 3D library could not be loaded. Check your connection and reload.'; document.getElementById('loading').classList.add('off'); return; }
 
 /* ============================================================
@@ -2566,6 +2567,9 @@ const orbitGeo=new THREE.BufferGeometry().setFromPoints(orbitPts);
 {
   const S=sys.scene;
   sys.stars=makeStars(2500,120000,1.6); S.add(sys.stars); sys.sky=makeSkySphere(150000); sys.sky.material.transparent=true; S.add(sys.sky);
+  // Draw the fading backgrounds before transparent foreground objects. Rings do
+  // not write depth, so a sky sphere sorted after them would erase their pixels.
+  sys.sky.renderOrder=-100; sys.stars.renderOrder=-99;
   sys.sun=new THREE.Mesh(unitSphere, SUN_MAT()); S.add(sys.sun);
   sys.glare=new THREE.Sprite(new THREE.SpriteMaterial({map:glareTex,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,opacity:0.8})); S.add(sys.glare);
   sys.disc=new THREE.Mesh(new THREE.CircleGeometry(1,128), new THREE.MeshBasicMaterial({color:0x6cb8ff,transparent:true,opacity:0.035,side:THREE.DoubleSide,depthWrite:false})); sys.disc.rotation.x=-Math.PI/2; S.add(sys.disc);
@@ -2675,7 +2679,7 @@ function updateSystemMotion(dt){
   sys.bodies.forEach(b=>{
     const d=b.def;
     if(!A_ENG){ const ang=b.phase+D/d.T*Math.PI*2; b.pivot.rotation.y=ang; b.axis.quaternion.setFromAxisAngle(Y_UP,-ang).multiply(b.poleQ); }   // no ephemeris: circles, axis held fixed in space
-    const spin=clamp(2*Math.PI*dps*24/d.rot,-3,3); b.mesh.rotation.y+=dt*spin;
+    const spin=clamp(2*Math.PI*dps*24/d.rot,-3,3); if(state.sysPlaying)b.mesh.rotation.y+=dt*spin;
     b.moons.forEach(m=>{ if(!m.real) m.pivot.rotation.y=m.phase+D/m.def.T*Math.PI*2; m.orbit.visible=state.sysOrbits&&state.sysMoons; m.mesh.visible=state.sysMoons; });
     b.orbit.visible=state.sysOrbits;
   });

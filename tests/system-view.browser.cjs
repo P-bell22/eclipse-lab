@@ -46,6 +46,48 @@ async function run(browser,baseURL='http://127.0.0.1:4176/eclipse-lab-site/'){
     finally{await context.close();}
   }
 
+  await check('opening the source template forwards to the working built page',async page=>{
+    const root=new URL(baseURL);if(root.pathname.endsWith('index.html'))root.pathname=root.pathname.slice(0,-10);else if(!root.pathname.endsWith('/'))root.pathname+='/';
+    await page.goto(new URL('src/eclipse-lab.src.html',root).href);
+    await page.waitForURL(new URL('index.html',root).href);
+    await page.waitForFunction(()=>!!window.__eclipseLab);
+    assert.equal(await page.evaluate(()=>!!window.__eclipseSourcePreview),false,'The built page must not redirect again');
+    await page.locator('[data-layout="lineup"]').click();await twoFrames(page);
+    assert.equal(await page.evaluate(()=>window.__eclipseLab.state.sysLayout),'lineup','Controls work after forwarding');
+  });
+
+  await check('Pause freezes axial spin, planets and moons; Play resumes them',async page=>{
+    const motion=()=>page.evaluate(()=>{const E=window.__eclipseLab;return {days:E.state.sysDays,bodies:E.sys.bodies.map(b=>({spin:b.mesh.quaternion.toArray(),position:b.group.position.toArray(),moons:b.moons.map(m=>({position:m.mesh.position.toArray(),pivot:m.pivot.quaternion.toArray()}))}))};});
+    await page.evaluate(()=>{const E=window.__eclipseLab;E.state.sysPlaying=true;E.systemView.refresh();});
+    await page.locator('#sysPlay').click();await twoFrames(page);const stopped=await motion();
+    await page.waitForTimeout(200);assert.deepEqual(await motion(),stopped,'All simulated motion stops');
+    await page.locator('#sSpeed').fill('1');await page.waitForTimeout(100);
+    assert.deepEqual(await motion(),stopped,'Changing speed while paused must not rotate bodies');
+    await page.locator('#sysPlay').click();await page.waitForTimeout(150);const moving=await motion();
+    assert.ok(moving.days>stopped.days,'Orbital time resumes');
+    moving.bodies.forEach((b,i)=>assert.notDeepEqual(b.spin,stopped.bodies[i].spin,'Each planet resumes rotating'));
+  });
+
+  await check('Saturn rings render on both sides and at shallow camera angles in both scales',async page=>{
+    for(const scale of ['condensed','true']){
+      await page.locator('[data-scale="'+scale+'"]').click();await settled(page);
+      for(const inclination of [.7,-.7,.08,-.08]){
+        await page.evaluate(inclination=>{
+          const E=window.__eclipseLab,b=E.sys.bodies.find(b=>b.def.n==='Saturn'),V=E.THREE.Vector3,c=E.controls;
+          E.focusOn('Saturn',0);c.tw=null;c.follow=null;
+          c.target.copy(b.mesh.getWorldPosition(new V()).sub(E.sys.scene.position));c.radius=b.r*10;
+          const normal=new V(0,1,0).applyQuaternion(b.poleQ),radial=new V(1,0,0).applyQuaternion(b.poleQ);
+          const direction=radial.multiplyScalar(Math.sqrt(1-inclination*inclination)).addScaledVector(normal,inclination).normalize();
+          c.theta=Math.atan2(direction.z,direction.x);c.phi=Math.acos(direction.y);b.rings.visible=true;
+        },inclination);
+        await twoFrames(page);const visible=await page.locator('#gl').screenshot();
+        await page.evaluate(()=>{window.__eclipseLab.sys.bodies.find(b=>b.def.n==='Saturn').rings.visible=false;});
+        await twoFrames(page);const hidden=await page.locator('#gl').screenshot();
+        assert.ok(!visible.equals(hidden),`${scale}, inclination ${inclination}: rings must contribute visible pixels, not be erased by the sky`);
+      }
+    }
+  });
+
   await check('production true scale uses one physical radius for Sun, every planet and moon',async page=>{
     await page.locator('[data-scale="true"]').click();await settled(page);
     const values=await page.evaluate(()=>{const E=window.__eclipseLab;return {sun:E.sys.sunR,bodies:E.sys.bodies.map(b=>({name:b.def.n,r:b.r,km:b.def.R,mesh:b.mesh.scale.x,moons:b.moons.map(m=>({name:m.def.n,r:m.r,km:m.def.R,mesh:m.mesh.scale.x}))}))};});

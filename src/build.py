@@ -1,6 +1,8 @@
 import os
+import re
 here = os.path.dirname(os.path.abspath(__file__))
 src = open(os.path.join(here, 'eclipse-lab.src.html'), encoding='utf-8').read()
+src = re.sub(r'<!--SOURCE_PREVIEW_START-->.*?<!--SOURCE_PREVIEW_END-->\s*', '', src, flags=re.S)
 assets = open(os.path.join(here, 'assets.js'), encoding='utf-8').read()
 astro = open(os.path.join(here, 'vendor/astronomy.browser.min.js'), encoding='utf-8').read()
 bessel = open(os.path.join(here, 'bessel.js'), encoding='utf-8').read() + '\n' + open(os.path.join(here, 'bessel_data.js'), encoding='utf-8').read()
